@@ -30,7 +30,9 @@ import sys
 import os
 import subprocess
 import re
-# import lxml
+import json
+import logging
+from lxml import etree
 
 
 # constants (feel free to change these to your favorite defaults)
@@ -115,14 +117,10 @@ parser.add_argument('-X', '--extra', metavar='Inkscape_Export_Options', default=
                     help='Extra options passed through (litterally) to inkscape for export. See Inkscape --help for more.')
 parser.add_argument('-D', '--debug', action='store_true', default=False,
                     help='Generates (very) verbose output.')
-
-
-def message(*msg):
-    """ Utility "print" function that handles verbosity of messages
-    """
-    if (not args.silent or args.debug):
-        print ''.join(msg)
-    return
+parser.add_argument('-c', '--conf', metavar='conf', default='',
+                    help='JSON configuration file.')
+parser.add_argument('-v', '--verbosity', default=0,
+                    help='Verbosity level.')
 
 
 def debug(*msg):
@@ -146,17 +144,69 @@ def printif(*args):
 def exportObject(obj, args, prefix, extension, infile):
     debug("exporting ", obj)
     destfile = ''.join([args.destdir, prefix, obj, '.', extension])
-    message('  ' + obj + ' to ' + destfile)
+    logging.info('  ' + obj + ' to ' + destfile)
     command = args.inkscape + ' -i ' + obj + ' --export-' + args.type + ' ' + destfile + ' ' + args.extra + ' ' + infile
-    debug("runnning " + command)
+    debug("running " + command)
     run(command, shell=True)
+
+
+def export_objects(objects, filetype, args, infile, outfile):
+    logging.debug("exporting ", objects)
+    includes = ''
+    for o in objects:
+        includes += ' -i ' + o
+    command = args.inkscape + includes + ' --export-' + filetype + ' ' + outfile + ' ' + args.extra + ' ' + infile
+    print("running " + command)
+    run(command, shell=True)
+
+
+def get_layer_id(infile, layer_name):
+    # TODO: the parsing of the file should be done only once, returning all the layers
+    # message("exporting from " + infile + " all objects " + ife(args.exclude, 'not ', '') + "matching " + args.xpath)
+    parser = etree.XMLParser()   # ns_clean=True)
+    intree = etree.parse(infile, parser)
+    if (len(parser.error_log) > 0):
+        logging.error("Could not parse ", infile, ":")
+        debug(parser.error_log)
+
+    # find the ids
+    find_str_ids = "(" + "//svg:g[@inkscape:groupmode='layer']" + ")/@id"
+    find_ids = etree.XPath(find_str_ids, namespaces=xpath_namespaces)
+    ids = find_ids(intree)
+    print(ids)
+
+    # find the labels
+    find_str_labels = "(" + "//svg:g[@inkscape:groupmode='layer']" + ")/@inkscape:label"
+    find_labels = etree.XPath(find_str_labels, namespaces=xpath_namespaces)
+    labels = find_labels(intree)
+
+    index = labels.index(layer_name)
+    return ids[index]
+
+
+def get_id(infile, obj):
+    print("obj: %s" % obj)
+    if 'layer' in obj:
+        obj_id = get_layer_id(infile, obj['layer'])
+    print("Returning: %s" % obj_id)
+    return obj_id
+
+
+def get_ids(infile, objs):
+    ids = [get_id(infile, o) for o in objs]
+    return ids
+
+
+def get_file_type_from_filename(filename):
+    return filename.split('.')[-1]
 
 # handle arguments
 args = parser.parse_args()
-if (args.silent):
-    run = subprocess.check_output
-else:
+if args.verbosity >= 1:
     run = subprocess.check_call
+else:
+    run = subprocess.check_output
+
 # verify inkscape path
 try:
     run([args.inkscape, "-V"])
@@ -164,6 +214,23 @@ except Exception:
     print '''Could not find inkscape command line executable, set --inkscape option accordingly.
 It is usually /usr/bin/inkscape in linux, C:\Progra~1\Inkscape\inkscape.com in windows, and /Applications/Inkscape.app/Contents/Resources/bin/inkscape in Mac.'''
     sys.exit(2)
+
+if args.conf != "":
+    with open(args.conf) as config_file:
+        conf = json.load(config_file)
+    infile = conf['input']
+    for out in conf['output']:
+        outfile = out['filename']
+        objects_ids = get_ids(infile, out['objects'])
+        args.extra = "--export-area-page --export-id-only"
+        if out['type'] == 'auto':
+            filetype = get_file_type_from_filename(outfile)
+        else:
+            filetype = out['type']
+        export_objects(objects_ids, filetype, args, infile, outfile)
+
+sys.exit(-1)
+
 # set 'include' mode by default for custom pattern or xpath
 if (args.exclude == 0):
     args.exclude = (args.pattern is default_pattern) and (args.xpath is '')
@@ -175,7 +242,7 @@ else:
 
 # create destdir if needed
 if not os.path.exists(args.destdir):
-    message('creating directory: ' + args.destdir)
+    logging.info('creating directory: ' + args.destdir)
     os.makedirs(args.destdir)
 elif args.destdir is '.':
     args.destdir = ''   # remove dot for current directory to ease the definition of destfile
@@ -195,7 +262,7 @@ for infile in args.infiles:
         # debug("  updated prefix to ", prefix, "  - infile is ", infile)
     if (regexp_mode):
         # import re
-        message("exporting from " + infile + " all objects " + ife(args.exclude, 'not ', '') + "matching " + args.pattern)
+        logging.info("exporting from " + infile + " all objects " + ife(args.exclude, 'not ', '') + "matching " + args.pattern)
         objects_all = subprocess.check_output([args.inkscape, "--query-all", infile])
         # message(objects)
         for obj in objects_all.splitlines():
@@ -205,16 +272,15 @@ for infile in args.infiles:
             if ((args.exclude and (match is None)) or (not args.exclude and (match is not None))):
                 exportObject(obj, args, prefix, extension, infile)
     elif (xpath_mode):
-        from lxml import etree
-        message("exporting from " + infile + " all objects " + ife(args.exclude, 'not ', '') + "matching " + args.xpath)
+        logging.info("exporting from " + infile + " all objects " + ife(args.exclude, 'not ', '') + "matching " + args.xpath)
         parser = etree.XMLParser()   # ns_clean=True)
         intree = etree.parse(infile, parser)
         if (len(parser.error_log) > 0):
-            message("Could not parse ", infile, ":")
+            logging.error("Could not parse ", infile, ":")
             debug(parser.error_log)
         find = etree.XPath("(" + args.xpath + ")/@id", namespaces=xpath_namespaces)   # find the ids, not the objects
         objects = find(intree)
-        message("found %i objects matching XPath" % len(objects))
+        logging.info("found %i objects matching XPath" % len(objects))
         if (not args.exclude):   # include mode
             for obj in objects:
                 exportObject(obj, args, prefix, extension, infile)
