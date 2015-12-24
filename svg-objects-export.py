@@ -105,10 +105,6 @@ parser.add_argument('-e', '--exclude', action='store_true', default=0,
                     help='use pattern or expression to determine which objects to exclude from export, rather than include')
 parser.add_argument('-d', '--destdir', default='.',
                     help='directory where images are exported to. Trailing slash is needed (backslash for windows), default is working directory.')
-parser.add_argument('-s', '--silent', action='store_true', default=False,
-                    help='do not print information to command line. Silent mode does not overwrite existing files by default, combine with --force if needed.')
-parser.add_argument('-f', '--force', action='store_true', default=False,
-                    help='overwrite existing files. Default is to warn and prompt user unless --silent is active.')
 parser.add_argument('-P', '--prefix', default='FILE_',
                     help='prefix the generated file names with given PREFIX. "FILE" in the prefix is replaced with the svg file name. Default is "FILE_".')
 parser.add_argument('-i', '--inkscape', default=inkscape_prog,   # metavar='path_to_inkscape',
@@ -147,49 +143,13 @@ def printif(*args):
     print ife(args)
 
 
-def confirm(prompt=None, resp=False):   # adapted from http://code.activestate.com/recipes/541096-prompt-the-user-for-confirmation/
-    """prompts for yes or no response from the user. Returns True for yes and
-    False for no.
-
-    'resp' should be set to the default value assumed by the caller when
-    user simply types ENTER.
-    """
-
-    if prompt is None:
-        prompt = 'Confirm'
-
-    if resp:
-        prompt = '%s %s/%s: ' % (prompt, 'Y', 'n')
-    else:
-        prompt = '%s %s/%s: ' % (prompt, 'N', 'y')
-
-    while True:
-        ans = raw_input(prompt)
-        if not ans:
-            return resp
-        if ans not in ['y', 'Y', 'n', 'N']:
-            print 'please enter y or n.'
-            continue
-        if ans == 'y' or ans == 'Y':
-            return True
-        if ans == 'n' or ans == 'N':
-            return False
-
-
 def exportObject(obj, args, prefix, extension, infile):
     debug("exporting ", obj)
     destfile = ''.join([args.destdir, prefix, obj, '.', extension])
-    export = args.force
-    if not args.force:
-        if (not os.path.exists(destfile)):
-            export = True
-        elif not args.silent:   # silent does not overwrite, use -sf if needed.
-            export = confirm(prompt='File %s already exists, do you want to overwrite it?' % (destfile))
-    if export:
-        message('  ' + obj + ' to ' + destfile)
-        command = args.inkscape + ' -i ' + obj + ' --export-' + args.type + ' ' + destfile + ' ' + args.extra + ' ' + infile
-        debug("runnning " + command)
-        run(command, shell=True)
+    message('  ' + obj + ' to ' + destfile)
+    command = args.inkscape + ' -i ' + obj + ' --export-' + args.type + ' ' + destfile + ' ' + args.extra + ' ' + infile
+    debug("runnning " + command)
+    run(command, shell=True)
 
 # handle arguments
 args = parser.parse_args()
