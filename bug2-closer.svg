@@ -177,7 +177,7 @@
   <g
      inkscape:groupmode="layer"
      id="layer1"
-     inkscape:label="Layer0"
+     inkscape:label="L0"
      style="display:inline">
     <circle
        id="circle6"
@@ -289,7 +289,7 @@
   </g>
   <g
      style="display:inline"
-     inkscape:label="Layer1 Line"
+     inkscape:label="L1 Line"
      id="g7158"
      inkscape:groupmode="layer">
     <polyline
@@ -312,8 +312,8 @@
   <g
      inkscape:groupmode="layer"
      id="layer4"
-     inkscape:label="Layer2 Arrow1"
-     style="display:none">
+     inkscape:label="L2 Arrow1"
+     style="display:inline">
     <path
        style="display:inline;fill:none;stroke:#ff0000;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;marker-end:url(#Arrow1Mend-0-4)"
        d="m 1,66.394781 0,83.705349 117.18749,0 0,-145.0892762 -113.0617014,0"
@@ -329,7 +329,7 @@
   </g>
   <g
      style="display:inline"
-     inkscape:label="Layer3 Label1"
+     inkscape:label="L3 Label1"
      id="g7271"
      inkscape:groupmode="layer">
     <circle
@@ -381,7 +381,7 @@
   <g
      inkscape:groupmode="layer"
      id="layer3"
-     inkscape:label="Layer4 Arrow2"
+     inkscape:label="L4 Arrow2"
      style="display:inline">
     <path
        style="display:inline;fill:none;stroke:#ff0000;stroke-width:26.88000107;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;marker-end:url(#Arrow1Mend-0)"
@@ -392,7 +392,7 @@
   </g>
   <g
      style="display:inline"
-     inkscape:label="Layer5 Label2"
+     inkscape:label="L5 Label2"
      id="g7401"
      inkscape:groupmode="layer">
     <circle
@@ -441,7 +441,7 @@
   <g
      inkscape:groupmode="layer"
      id="layer2"
-     inkscape:label="Layer6 Arrow3"
+     inkscape:label="L6 Arrow3"
      style="display:inline">
     <path
        style="display:inline;fill:none;stroke:#ff0000;stroke-width:26.88000107;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;marker-end:url(#Arrow1Mend)"
