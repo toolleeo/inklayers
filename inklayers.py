@@ -108,19 +108,21 @@ p_add('-X', '--extra', metavar='Inkscape_Export_Options', default=' ',
       help='Extra options passed through (literally) to inkscape for export. See Inkscape --help for more.')
 p_add('-D', '--debug', action='store_true', default=False,
       help='Generates (very) verbose output.')
+p_add('-q', '--query', action='store_true', default=False,
+      help='List the available layers.')
 p_add('-v', '--verbosity', default=0,
       help='Verbosity level.')
 p_add('-s', '--stack', default=False,
       help='Export all layers in stacked mode. Use -e to exclude some layers.')
-p_add('-1', '--one', default=True,
-      help='Export all layers, one layer per output file. Use -e to exclude some layers.')
+p_add('-S', '--split', default=True,
+      help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
 
 
 def debug(*msg):
     """ Utility "print" function that handles verbosity of messages
     """
     if (args.debug):
-        print msg
+        print(msg)
     return
 
 
@@ -181,13 +183,16 @@ def is_layer(e):
         return False
 
 
-def match_label(e, objects):
+def get_label(e):
     label = e.get('{http://www.inkscape.org/namespaces/inkscape}label')
+    return label
+
+
+def match_label(e, objects):
+    label = get_label(e)
     # print('   Checking label %s in %s' % (label, objects))
-    for o in objects:
-        if 'layer' in o:
-            if label == o['layer']:
-                return True
+    if label in objects:
+        return True
     return False
 
 
@@ -237,7 +242,7 @@ def split_filename(fname):
 
 def convert(svg_file, outfile, desttype, args):
     """
-    Convert svg_file, provided with extension, into desttype with same basename.
+    Convert svg_file, provided with extension, into outfile.
     Args contains the inkscape pathname and arguments.
     """
     if not inkscape_installed(args):
@@ -250,8 +255,101 @@ def convert(svg_file, outfile, desttype, args):
     run(command, shell=True)
 
 
+def parse_interval_string(s):
+    """
+    Parse the layer indexing string.
+    Intervals can be defined by one number or two numbers separated by dash.
+    Each number is prefixed by '#'.
+    Different intervals can be separated by comma.
+    Returns a list of tuples. Each tuple is the closed interval of layer indexes.
+    Examples:
+
+      "#0-#10" -> [(0, 10)]
+      "#0,#10" -> [(0, 0), (10, 10)]
+      "#0,#10-#15,#30" -> [(0, 0), (10, 15), (30, 30)]
+    """
+    intervals = []
+    for i in s.split(','):
+        tokens = i.split('-')
+        tokens = [x.strip() for x in tokens]
+        try:
+            intvals = [int(x[1:]) for x in tokens]
+        except Exception:
+            return None
+        if len(intvals) == 1:
+            intervals.append((intvals[0], intvals[0]))
+        elif len(intvals) == 2:
+            intervals.append((intvals[0], intvals[1]))
+        else:
+            return None
+    return intervals
+
+
+def get_filename(fmt, basename=None, extension=None, index=None):
+    if fmt.find('%b') > 0 and basename is None:
+        return None
+    if basename is not None:
+        fmt = fmt.replace('%b', basename)
+    if fmt.find('%e') > 0 and extension is None:
+        return None
+    if extension is not None:
+        fmt = fmt.replace('%e', extension)
+    if fmt.find('%n') > 0 and index is None:
+        return None
+    if index is not None:
+        fmt = fmt.replace('%n', str(index))
+    return fmt
+
+
+def get_filters(filters, keyword):
+    """
+    If no layers are listed, returns an empty list.
+    """
+    logging.debug('filters: %s keyword %s' % (str(filters), keyword))
+    filt = []
+    if keyword in filters:
+        for x in filters[keyword]:
+            intervals = parse_interval_string(x)
+            if intervals is not None:
+                filt.extend(intervals)
+    return filt
+
+
+def is_number_in_intervals(n, intervals):
+    """
+    Check whether the numerical value n is included in any interval
+    in the intervals list.
+    The intervals list has the form [(x1, x2), (y1, y2), ...]
+    """
+    if any(lower <= n <= upper for (lower, upper) in intervals):
+        return True
+    else:
+        return False
+
+
+def get_filtered_layer_names(labels, filters):
+    include = get_filters(filters, 'include')
+    exclude = get_filters(filters, 'exclude')
+    print('include = %s' % str(include))
+    print('exclude = %s' % str(exclude))
+    for i, label in enumerate(labels):
+        # exclude those elements that are not included
+        if not is_number_in_intervals(i, include):
+            labels[i] = None
+        # exclude those elements that are explicitly excluded
+        if is_number_in_intervals(i, exclude):
+            labels[i] = None
+    # remove None values
+    l = [x for x in labels if x is not None]
+    return l
+
+
 def process_config_file(conf, args):
-    infile = conf['input']
+    try:
+        infile = conf['input']['filename']
+    except:
+        print('JSON format error: input -> filename not found.')
+        return
     with open(infile) as f:
         tree = etree.parse(f)
         # root = tree.getroot()
@@ -260,20 +358,82 @@ def process_config_file(conf, args):
         #     print('%s %s' % (x.tag, x.get('{http://www.inkscape.org/namespaces/inkscape}label')))
         #     print('%s %s' % (x.tag, x.keys()))
         #     # print('%s %s' % (x.tag, x.get('id')))
+        try:
+            outfile = conf['output']['filename']
+        except Exception:
+            print('JSON format error: output -> filename not found.')
+            return
 
-        for out in conf['output']:
-            outfile = out['filename']
-            (base_name, extension) = split_filename(outfile)
-            print('%s : %s . %s' % (outfile, base_name, extension))
-            save_svg(tree, out['objects'], base_name + '.svg')
+        try:
+            dest_type = conf['output']['type']
+        except Exception:
+            print('JSON format error: output -> type not found.')
+            return
 
+        try:
+            slides = conf['output']['slides']
+        except Exception:
+            print('JSON format error: output -> slides not found.')
+            return
+
+        for index, slide in enumerate(slides):
+            # a filename specification in a slide overrides the global one
+            if 'filename' in slide:
+                slide_filename_fmt = slide['filename']
+            else:
+                slide_filename_fmt = outfile
+            # a type specification in a slide overrides the global one
+            if 'type' in slide:
+                type_slide = slide['type']
+            else:
+                type_slide = dest_type
+
+            (bn, ext) = split_filename(infile)
+            slide_filename = get_filename(slide_filename_fmt, basename=bn, extension='svg', index=index)
+            (base_name, extension) = split_filename(slide_filename)
+            labels = get_layer_labels(get_layer_objects(tree))
+            logging.debug('labels %s' % str(labels))
+            logging.debug('slide %s' % str(slide))
+            layers = get_filtered_layer_names(labels, slide)
+            logging.debug('layers %s' % str(layers))
+
+            save_svg(tree, layers, slide_filename)
+
+            # TODO: add support for automatic file extension
             # convert the svg file into the desired format
             # if out['type'] == 'auto':
             #     filetype = get_file_type_from_filename(outfile)
             # else:
-            desttype = out['type']
-            convert(base_name + '.svg', outfile, desttype, args)
+            convert(base_name + '.svg', base_name + '.' + type_slide, type_slide, args)
 
+
+def get_layer_objects(tree):
+    """
+    Returns the list of layer objects contained in the XML tree.
+    """
+    root = tree.getroot()
+    layers = [x for x in root if is_layer(x)]
+    return layers
+
+
+def get_layer_labels(objects):
+    """
+    Returns the list of labels of each layer object.
+    """
+    labels = [get_label(x) for x in objects if is_layer(x)]
+    return labels
+
+
+def report_layers_info(infile):
+    """
+    Retrieve information about layers in a SVG file.
+    Returns the set of strings to print, already formatted.
+    """
+    with open(infile) as f:
+        tree = etree.parse(f)
+        objects = get_layer_objects(tree)
+        lines = ["#%d: '%s'" % (i, get_label(x)) for i, x in enumerate(objects) if is_layer(x)]
+        return lines
 
 if __name__ == '__main__':
     # handle command-line arguments
@@ -283,10 +443,18 @@ if __name__ == '__main__':
     else:
         run = subprocess.check_output
 
+    if args.query:
+        for infile_arg in args.infiles:
+            print('* Layers in %s' % infile_arg)
+            lines = report_layers_info(infile_arg)
+            for l in lines:
+                print(l)
+        sys.exit(0)
+
     for infile_arg in args.infiles:
-        try:
-            with open(infile_arg) as config_file:
-                conf = json.load(config_file)
+        # try:
+        with open(infile_arg) as config_file:
+            conf = json.load(config_file)
             process_config_file(conf, args)
-        except Exception:
-            print('File %s is not JSON.' % infile_arg)
+        # except Exception:
+        #     print('File %s is not JSON.' % infile_arg)
