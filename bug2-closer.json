@@ -1,71 +1,18 @@
 {
-	"input": "bug2-closer.svg",
-	"output": [
-		{
-			"filename": "bug2-closer-0.pdf",
-			"type": "pdf",
-			"objects": [
-				{"layer": "Layer0"}
-			]
-		},
-		{
-			"filename": "bug2-closer-1.pdf",
-			"type": "pdf",
-			"objects": [
-				{"layer": "Layer0"},
-				{"layer": "Layer1 Line"}
-			]
-		},
-		{
-			"filename": "bug2-closer-2.pdf",
-			"type": "pdf",
-			"objects": [
-				{"layer": "Layer0"},
-				{"layer": "Layer1 Line"},
-				{"layer": "Layer2 Arrow1"}
-			]
-		},
-		{
-			"filename": "bug2-closer-3.pdf",
-			"type": "pdf",
-			"objects": [
-				{"layer": "Layer0"},
-				{"layer": "Layer1 Line"},
-				{"layer": "Layer2 Arrow1"},
-				{"layer": "Layer3 Label1"}
-			]
-		},
-		{
-			"filename": "bug2-closer-4.pdf",
-			"type": "pdf",
-			"objects": [
-				{"layer": "Layer0"},
-				{"layer": "Layer1 Line"},
-				{"layer": "Layer3 Label1"},
-				{"layer": "Layer4 Arrow2"}
-			]
-		},
-		{
-			"filename": "bug2-closer-5.pdf",
-			"type": "pdf",
-			"objects": [
-				{"layer": "Layer0"},
-				{"layer": "Layer1 Line"},
-				{"layer": "Layer3 Label1"},
-				{"layer": "Layer4 Arrow2"},
-				{"layer": "Layer5 Label2"}
-			]
-		},
-		{
-			"filename": "bug2-closer-6.pdf",
-			"type": "pdf",
-			"objects": [
-				{"layer": "Layer0"},
-				{"layer": "Layer1 Line"},
-				{"layer": "Layer3 Label1"},
-				{"layer": "Layer5 Label2"},
-				{"layer": "Layer6 Arrow3"}
-			]
-		}
-	]
+	"input": {
+		"filename": "bug2-closer.svg"
+	},
+	"output": {
+		"type": "pdf",
+		"filename": "%f-%n.%e",
+		"slides": [
+			{"layers": ["Layer0"]},
+			{"layers": ["Layer0", "Layer1 Line"]},
+			{"layers": ["Layer0", "Layer1 Line", "Layer2 Arrow1"]},
+			{"layers": ["Layer0", "Layer1 Line", "Layer2 Arrow1", "Layer3 Label1"]},
+			{"layers": ["Layer0", "Layer1 Line", "Layer3 Label1", "Layer4 Arrow2"]},
+			{"layers": ["Layer0", "Layer1 Line", "Layer3 Label1", "Layer4 Arrow2", "Layer5 Label2"]},
+			{"layers": ["Layer0", "Layer1 Line", "Layer3 Label1", "Layer5 Label2", "Layer6 Arrow3"]}
+		]
+	}
 }
