@@ -1,0 +1,30 @@
+{
+	"input": {
+		"filename": "tb-star.svg"
+	},
+	"output": {
+		"type": "pdf",
+		"filename": "%f%n",
+		"slides": [
+			{"layers": ["L0"]},
+			{"layers": ["L0", "L1"]},
+			{"layers": ["L0", "L1", "L2"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L14 Msg:SameDeadline"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L15"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L15", "L16"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L15", "L16", "L17"]},
+			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L15", "L16", "L17", "L18 Msg:MoveDeadline", "L19"]}
+		]
+	}
+}
