@@ -97,38 +97,38 @@ class TestSuite(unittest.TestCase):
     def test_layer_filtering_no_inclusion(self):
         labels = ['L0', 'L1', 'L2', 'L3', 'L4']
         filters = {'exclude': ['L2']}
-        layers = inklayers.get_filtered_layer_names(labels, filters)
+        layers = inklayers.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, [])
 
     def test_layer_filtering_no_exclusion(self):
         labels = ['L0', 'L1', 'L2', 'L3', 'L4']
         filters = {'include': ['L0', 'L2']}
-        layers = inklayers.get_filtered_layer_names(labels, filters)
+        layers = inklayers.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, ['L0', 'L2'])
 
     def test_layer_filtering_included_1_interval_exclude_1_label(self):
         labels = ['L0', 'L1', 'L2', 'L3', 'L4']
         filters = {'include': ['#0-#4'], 'exclude': ['L2']}
-        layers = inklayers.get_filtered_layer_names(labels, filters)
+        layers = inklayers.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, ['L0', 'L1', 'L3', 'L4'])
 
     def test_layer_filtering_included_2_intervals_exclude_3_labels(self):
         labels = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7']
         filters = {'include': ['#0-#4,#6-#7'], 'exclude': ['L0', 'L2', 'L7']}
-        layers = inklayers.get_filtered_layer_names(labels, filters)
+        layers = inklayers.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, ['L1', 'L3', 'L4', 'L6'])
 
     def test_layer_filtering_with_spaces_in_labels(self):
         labels = ['L0 test', 'L1 test 2', 'L2 test 3', 'L3', 'L4', 'L5', 'L6 last', 'L7']
         filters = {'include': ['#0-#4,#6-#7'], 'exclude': ['L0 test', 'L2 test 3', 'L7']}
-        layers = inklayers.get_filtered_layer_names(labels, filters)
-        self.assertEqual(layers, ['L1', 'L3', 'L4', 'L6 last'])
+        layers = inklayers.get_filtered_layer_labels(labels, filters)
+        self.assertEqual(layers, ['L1 test 2', 'L3', 'L4', 'L6 last'])
 
     def test_layer_filtering_error_condition(self):
         labels = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5 msg:greetings',
                   'L6', 'L7', 'L8', 'L9', 'L10', 'L11', 'L12 msg:reply']
         filters = {"include": ["#0-#6"], "exclude": ["L5 msg:greetings"]}
-        layers = inklayers.get_filtered_layer_names(labels, filters)
+        layers = inklayers.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, ['L0', 'L1', 'L2', 'L3', 'L4', 'L6'])
 
     # Tests the inclusion of a number into a list of intervals

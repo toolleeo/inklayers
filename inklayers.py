@@ -305,13 +305,16 @@ def get_filters(filters, keyword):
     """
     If no layers are listed, returns an empty list.
     """
-    logging.debug('filters: %s keyword %s' % (str(filters), keyword))
+    # print('filters: %s keyword %s' % (str(filters), keyword))
     filt = []
     if keyword in filters:
-        for x in filters[keyword]:
+        for i, x in enumerate(filters[keyword]):
+            # print("i, x = %s" % x)
             intervals = parse_interval_string(x)
+            # print("intervals = %s" % intervals)
             if intervals is not None:
                 filt.extend(intervals)
+    # print('filt = %s' % filt)
     return filt
 
 
@@ -327,11 +330,30 @@ def is_number_in_intervals(n, intervals):
         return False
 
 
-def get_filtered_layer_names(labels, filters):
+def get_filters_by_label(labels, filters, keyword):
+    filt = []
+    if keyword in filters:
+        for x in filters[keyword]:
+            if x in labels:
+                index = labels.index(x)
+                filt.append((index, index))
+    return filt
+
+
+def get_filtered_layer_labels(labels, filters):
+    """
+    Returns the list of layer's labels by filtering the list
+    *labels* by including and excluding the elements specified
+    in the *filters* dict.
+    The intermediate filters corresponds to numerical intervals.
+    """
+    # add filters specified by intervals
     include = get_filters(filters, 'include')
     exclude = get_filters(filters, 'exclude')
-    print('include = %s' % str(include))
-    print('exclude = %s' % str(exclude))
+    # add intervals corresponding to labels
+    include.extend(get_filters_by_label(labels, filters, 'include'))
+    exclude.extend(get_filters_by_label(labels, filters, 'exclude'))
+    # filters labels
     for i, label in enumerate(labels):
         # exclude those elements that are not included
         if not is_number_in_intervals(i, include):
@@ -394,7 +416,7 @@ def process_config_file(conf, args):
             labels = get_layer_labels(get_layer_objects(tree))
             logging.debug('labels %s' % str(labels))
             logging.debug('slide %s' % str(slide))
-            layers = get_filtered_layer_names(labels, slide)
+            layers = get_filtered_layer_labels(labels, slide)
             logging.debug('layers %s' % str(layers))
 
             save_svg(tree, layers, slide_filename)
