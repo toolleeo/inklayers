@@ -1,0 +1,17 @@
+{
+	"input": {
+		"filename": "fishes.svg"
+	},
+	"output": {
+		"type": "pdf",
+		"filename": "%f-%n.%e",
+		"slides": [
+			{"layers": ["L0"]},
+			{"layers": ["L0", "L1"]},
+			{"layers": ["#0-#2"]},
+			{"layers": ["#0-#3"]},
+			{"layers": ["#0-#4"]},
+			{"layers": ["#0-#12"], "exclude": "L5 msg:greetings"}
+		]
+	}
+}
