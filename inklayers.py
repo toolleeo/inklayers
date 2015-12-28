@@ -118,12 +118,14 @@ p_add('-S', '--split', default=True,
       help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
 
 
-def debug(*msg):
-    """ Utility "print" function that handles verbosity of messages
+def disp(msg, args, level):
+    """ Print function that handles verbosity level.
     """
-    if (args.debug):
-        print(msg)
-    return
+    try:
+        if args.verbosity >= level:
+            print(msg)
+    except:
+        pass
 
 
 def get_layer_id(infile, layer_name):
@@ -133,7 +135,7 @@ def get_layer_id(infile, layer_name):
     intree = etree.parse(infile, parser)
     if (len(parser.error_log) > 0):
         logging.error("Could not parse ", infile, ":")
-        debug(parser.error_log)
+        logging.debug(parser.error_log)
 
     # find the ids
     find_str_ids = "(" + "//svg:g[@inkscape:groupmode='layer']" + ")/@id"
@@ -161,19 +163,6 @@ def get_id(infile, obj):
 def get_ids(infile, objs):
     ids = [get_id(infile, o) for o in objs]
     return ids
-
-
-def get_file_type_from_filename(filename):
-    return filename.split('.')[-1]
-
-
-def find_layers(tree):
-    find_str_layers = "(" + "//svg:g[@inkscape:groupmode='layer']" + ")"
-    find_layers = etree.XPath(find_str_layers, namespaces=xpath_namespaces)
-    layers = find_layers(tree)
-    print(layers)
-    # for l in layers:
-    #     print(etree.tostring(l, pretty_print=True))
 
 
 def is_layer(e):
@@ -205,15 +194,19 @@ def print_layers(tree):
             # print('%s %s' % (x.tag, x.get('id')))
 
 
-def save_svg(tree, objects, outfile):
-    print('*** Saving to %s' % outfile)
+def save_svg(tree, objects, outfile, args={}):
+    disp('*** Saving to %s' % outfile, args, 1)
     mytree = deepcopy(tree)
     root = mytree.getroot()
     # print(etree.tostring(root, pretty_print=True))
     for x in root:
         if is_layer(x) and not match_label(x, objects):
             root.remove(x)
-    print_layers(mytree)
+    try:
+        if args.verbosity >= 1:
+            print_layers(mytree)
+    except:
+        pass
     with open(outfile, 'w') as f:
         f.write(etree.tostring(mytree, pretty_print=True))
 
@@ -251,7 +244,7 @@ def convert(svg_file, outfile, desttype, args):
         return
 
     command = args.inkscape + ' --export-' + desttype + ' ' + outfile + ' ' + args.extra + ' ' + svg_file
-    print("Running '%s'" % command)
+    disp("Running '%s'" % command, args, 2)
     run(command, shell=True)
 
 
@@ -383,21 +376,18 @@ def process_config_file(conf, args):
         try:
             outfile = conf['output']['filename']
         except Exception:
-            print('JSON format error: output -> filename not found.')
+            print('JSON format error on "output -> filename" field.')
             return
-
         try:
             dest_type = conf['output']['type']
         except Exception:
-            print('JSON format error: output -> type not found.')
+            print('JSON format error on "output -> type" field.')
             return
-
         try:
             slides = conf['output']['slides']
         except Exception:
-            print('JSON format error: output -> slides not found.')
+            print('JSON format error on "output -> slides" field.')
             return
-
         for index, slide in enumerate(slides):
             # a filename specification in a slide overrides the global one
             if 'filename' in slide:
@@ -419,7 +409,7 @@ def process_config_file(conf, args):
             layers = get_filtered_layer_labels(labels, slide)
             logging.debug('layers %s' % str(layers))
 
-            save_svg(tree, layers, slide_filename)
+            save_svg(tree, layers, slide_filename, args=args)
 
             # TODO: add support for automatic file extension
             # convert the svg file into the desired format
