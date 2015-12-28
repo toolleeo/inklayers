@@ -112,10 +112,12 @@ p_add('-q', '--query', action='store_true', default=False,
       help='List the available layers.')
 p_add('-v', '--verbosity', default=0,
       help='Verbosity level.')
-p_add('-s', '--stack', default=False,
+p_add('-s', '--stack', action='store_true', default=False,
       help='Export all layers in stacked mode. Use -e to exclude some layers.')
-p_add('-S', '--split', default=True,
+p_add('-S', '--split', action='store_true', default=False,
       help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
+p_add('-l', '--latex', action='store_true', default=False,
+      help='Print code for inclusion into LaTeX documents.')
 
 
 def disp(msg, args, level):
@@ -233,9 +235,10 @@ def split_filename(fname):
         return None, None
 
 
-def convert(svg_file, outfile, desttype, args):
+def svg2file(base_name, desttype, args):
     """
-    Convert svg_file, provided with extension, into outfile.
+    Convert base_name.svg into outfile named base_file.ext,
+    where ext depends on desttype.
     Args contains the inkscape pathname and arguments.
     """
     if not inkscape_installed(args):
@@ -243,6 +246,8 @@ def convert(svg_file, outfile, desttype, args):
         print('Set --inkscape option accordingly.')
         return
 
+    svg_file = base_name + '.svg'
+    outfile = base_name + '.' + desttype
     command = args.inkscape + ' --export-' + desttype + ' ' + outfile + ' ' + args.extra + ' ' + svg_file
     disp("Running '%s'" % command, args, 2)
     run(command, shell=True)
@@ -360,11 +365,16 @@ def get_filtered_layer_labels(labels, filters):
 
 
 def process_config_file(conf, args):
+    """Manages the generation of svg files and conversions according
+    with the desired options.
+    Returns the list of generated files.
+    """
     try:
         infile = conf['input']['filename']
     except:
         print('JSON format error: input -> filename not found.')
         return
+    filenames = []
     with open(infile) as f:
         tree = etree.parse(f)
         # root = tree.getroot()
@@ -402,6 +412,7 @@ def process_config_file(conf, args):
 
             (bn, ext) = split_filename(infile)
             slide_filename = get_filename(slide_filename_fmt, basename=bn, extension='svg', index=index)
+            filenames.append(slide_filename)
             (base_name, extension) = split_filename(slide_filename)
             labels = get_layer_labels(get_layer_objects(tree))
             logging.debug('labels %s' % str(labels))
@@ -416,7 +427,8 @@ def process_config_file(conf, args):
             # if out['type'] == 'auto':
             #     filetype = get_file_type_from_filename(outfile)
             # else:
-            convert(base_name + '.svg', base_name + '.' + type_slide, type_slide, args)
+            svg2file(base_name, type_slide, args)
+    return filenames
 
 
 def get_layer_objects(tree):
@@ -447,6 +459,11 @@ def report_layers_info(infile):
         lines = ["#%d: '%s'" % (i, get_label(x)) for i, x in enumerate(objects) if is_layer(x)]
         return lines
 
+
+def print_latex_code(filenames):
+    for f in filenames:
+        print('\\includegraphics[width=1.0\\columnwidth]{%s}' % f)
+
 if __name__ == '__main__':
     # handle command-line arguments
     args = parser.parse_args()
@@ -467,6 +484,8 @@ if __name__ == '__main__':
         # try:
         with open(infile_arg) as config_file:
             conf = json.load(config_file)
-            process_config_file(conf, args)
+            filenames = process_config_file(conf, args)
+            if args.latex:
+                print_latex_code(filenames)
         # except Exception:
         #     print('File %s is not JSON.' % infile_arg)
