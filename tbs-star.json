@@ -1,30 +1,32 @@
 {
 	"input": {
-		"filename": "tb-star.svg"
+		"filename": "tbs-star.svg"
 	},
 	"output": {
 		"type": "pdf",
-		"filename": "%f%n",
+		"filename": "%b-%n.%e",
 		"slides": [
-			{"layers": ["L0"]},
-			{"layers": ["L0", "L1"]},
-			{"layers": ["L0", "L1", "L2"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L14 Msg:SameDeadline"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L15"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L15", "L16"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L15", "L16", "L17"]},
-			{"layers": ["L0", "L1", "L2", "L3 Deadline", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L15", "L16", "L17", "L18 Msg:MoveDeadline", "L19"]}
+			{"include": ["#0"]},
+			{"include": ["#0-#1"]},
+			{"include": ["#0-#2"]},
+			{"include": ["#0-#3"]},
+			{"include": ["#0-#4"]},
+			{"include": ["#0-#5"]},
+			{"include": ["#0-#6"]},
+			{"include": ["#0-#7"]},
+			{"include": ["#0-#8"]},
+			{"include": ["#0-#9"]},
+			{"include": ["#0-#10"]},
+			{"include": ["#0-#11"]},
+			{"include": ["#0-#12"]},
+			{"include": ["#0-#13"]},
+			{"include": ["#0-#14"]},
+			{"include": ["#0-#15"]},
+			{"include": ["#0-#16"], "exclude": ["L15 Msg:SameDeadline"]},
+			{"include": ["#0-#17"], "exclude": ["L15 Msg:SameDeadline"]},
+			{"include": ["#0-#18"], "exclude": ["L15 Msg:SameDeadline"]},
+			{"include": ["#0-#19"], "exclude": ["L15 Msg:SameDeadline"]},
+			{"include": ["#0-#20"], "exclude": ["L15 Msg:SameDeadline"]}
 		]
 	}
 }
