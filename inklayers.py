@@ -79,7 +79,7 @@ examples:
     exports all objects with an ID that does not resemble Inkscape
     default IDs, from any SVG file in user's home and tmp directories,
     to ./vector/ directory as EPS files, with no information displayed and
-    overwritting existing files
+    overwriting existing files
 
   %(prog)s --exclude --pattern '[0-9]' --extra '--export-dpi 900' in.svg
     exports all objects with an ID containing no digit, from in.svg file,
@@ -94,15 +94,15 @@ Additional examples: https://github.com/berteh/svg-objects-export/wiki
 p_add = parser.add_argument
 p_add('infiles', nargs='+',
       help='SVG or JSON file, wildcards supported')
-p_add('-a', '--add', action='store_true', default=0,
+p_add('-a', '--add', action='append', default=None,
       help='Add layers to export. Use labels or indexes.')
-p_add('-e', '--exclude', action='store_true', default=0,
+p_add('-e', '--exclude', action='append', default=None,
       help='Use label or index to determine which objects to exclude from export')
-p_add('-o', '--outfile', default='FILE_',
+p_add('-o', '--outfile', action='store', default=None, choices=['%b-%n.%e', '%b_%n.%e', '%n-%b.%e'],
       help='Output file format. See documentation for possible formats.')
-p_add('-i', '--inkscape', default=inkscape_prog,   # metavar='path_to_inkscape',
+p_add('-i', '--inkscape', action='store', default=inkscape_prog,   # metavar='path_to_inkscape',
       help='Path to inkscape command line executable')
-p_add('-t', '--type', default='pdf', choices=['png', 'ps', 'eps', 'pdf'],
+p_add('-t', '--type', action='store', default=None, choices=['png', 'ps', 'eps', 'pdf'],
       help='Export type (and suffix). pdf by default. See Inkscape --help for supported formats.')
 p_add('-X', '--extra', metavar='Inkscape_Export_Options', default=' ',
       help='Extra options passed through (literally) to inkscape for export. See Inkscape --help for more.')
@@ -110,7 +110,7 @@ p_add('-D', '--debug', action='store_true', default=False,
       help='Generates (very) verbose output.')
 p_add('-q', '--query', action='store_true', default=False,
       help='List the available layers.')
-p_add('-v', '--verbosity', default=0,
+p_add('-v', '--verbosity', action='count', default=0,
       help='Verbosity level.')
 p_add('-s', '--stack', action='store_true', default=False,
       help='Export all layers in stacked mode. Use -e to exclude some layers.')
@@ -200,7 +200,6 @@ def save_svg(tree, objects, outfile, args={}):
     disp('*** Saving to %s' % outfile, args, 1)
     mytree = deepcopy(tree)
     root = mytree.getroot()
-    # print(etree.tostring(root, pretty_print=True))
     for x in root:
         if is_layer(x) and not match_label(x, objects):
             root.remove(x)
@@ -210,7 +209,7 @@ def save_svg(tree, objects, outfile, args={}):
     except:
         pass
     with open(outfile, 'w') as f:
-        f.write(etree.tostring(mytree, pretty_print=True))
+        f.write(etree.tostring(mytree, encoding="unicode", pretty_print=True))
 
 
 def inkscape_installed(args):
@@ -383,32 +382,63 @@ def process_config_file(conf, args):
         #     print('%s %s' % (x.tag, x.get('{http://www.inkscape.org/namespaces/inkscape}label')))
         #     print('%s %s' % (x.tag, x.keys()))
         #     # print('%s %s' % (x.tag, x.get('id')))
-        try:
-            outfile = conf['output']['filename']
-        except Exception:
-            print('JSON format error on "output -> filename" field.')
-            return
-        try:
-            dest_type = conf['output']['type']
-        except Exception:
-            print('JSON format error on "output -> type" field.')
-            return
+
+        # If a file output format is not specified in the command line, the format in the config file is used.
+        # If it's specified, the command line option overrides the config file setting
+        if (args.outfile is None):
+            try:
+                outfile = conf['output']['filename']
+            except Exception:
+                print('JSON format error on "output -> filename" field.')
+                return
+        else:
+            outfile = args.outfile
+        disp("Output file format: %s" % outfile, args, 2)
+
+        # If a file type is not specified in the command line, the type from the config file is used.
+        # If it's specified, the command line option overrides the config file setting
+        if (args.type is None):
+            try:
+                dest_type = conf['output']['type']
+            except Exception:
+                print('JSON format error on "output -> type" field.')
+                return
+        else:
+            dest_type = args.type
+        disp("Destination type: %s" % dest_type, args, 2)
+
+        # get slides from config file
         try:
             slides = conf['output']['slides']
         except Exception:
             print('JSON format error on "output -> slides" field.')
             return
+
+        # process each slide in the config slide
         for index, slide in enumerate(slides):
-            # a filename specification in a slide overrides the global one
-            if 'filename' in slide:
-                slide_filename_fmt = slide['filename']
+
+            # if an output file format is not specified in the command line...
+            if args.outfile is None:
+                # ...a filename specification in a slide overrides the global one in the config file
+                if 'filename' in slide:
+                    slide_filename_fmt = slide['filename']
+                    disp("Output file format for this slide: %s" % slide_filename_fmt, args, 2)
+                else:
+                    slide_filename_fmt = outfile
             else:
-                slide_filename_fmt = outfile
-            # a type specification in a slide overrides the global one
-            if 'type' in slide:
-                type_slide = slide['type']
+                slide_filename_fmt = args.outfile
+
+            # if a type is not specified in the command line...
+            if args.type is None:
+                # ...a type specification in a slide overrides the global one in the config file
+                if 'type' in slide:
+                    type_slide = slide['type']
+                    disp("Destination type for this slide: %s" % type_slide, args, 2)
+                else:
+                    type_slide = dest_type
             else:
-                type_slide = dest_type
+                type_slide = args.type
+
 
             (bn, ext) = split_filename(infile)
             slide_filename = get_filename(slide_filename_fmt, basename=bn, extension='svg', index=index)
@@ -419,6 +449,19 @@ def process_config_file(conf, args):
             logging.debug('slide %s' % str(slide))
             layers = get_filtered_layer_labels(labels, slide)
             logging.debug('layers %s' % str(layers))
+
+            if args.exclude is not None:
+                for x in args.exclude:
+                    if str(x) in layers:
+                        disp("*Layer %s excluded" % str(x), args, 2)
+                        layers.remove(str(x))
+
+            if args.add is not None:
+                for x in args.add:
+                    if str(x) not in layers:
+                        disp("*Layer %s added" % str(x), args, 2)
+                        layers.append(str(x))
+
 
             save_svg(tree, layers, slide_filename, args=args)
 
@@ -467,25 +510,56 @@ def print_latex_code(filenames):
 if __name__ == '__main__':
     # handle command-line arguments
     args = parser.parse_args()
-    if args.verbosity >= 1:
+
+    if (args.debug == True):
+        args.verbosity = 2
+
+    if (args.verbosity >= 1):
         run = subprocess.check_call
     else:
         run = subprocess.check_output
 
-    if args.query:
-        for infile_arg in args.infiles:
-            print('* Layers in %s' % infile_arg)
-            lines = report_layers_info(infile_arg)
-            for l in lines:
-                print(l)
-        sys.exit(0)
-
     for infile_arg in args.infiles:
-        # try:
-        with open(infile_arg) as config_file:
-            conf = json.load(config_file)
-            filenames = process_config_file(conf, args)
-            if args.latex:
-                print_latex_code(filenames)
-        # except Exception:
-        #     print('File %s is not JSON.' % infile_arg)
+
+        disp("Processing %s file..." %infile_arg, args, 1)
+        b, ext = split_filename(infile_arg)
+
+        if ext == 'svg':
+            if args.query:
+                disp("Executing query...", args, 2)
+                try:
+                    print('* Layers in %s' % infile_arg)
+                    lines = report_layers_info(infile_arg)
+                    for l in lines:
+                        print(l)
+                    continue
+                except Exception:
+                    print("Couldn't get layer info from %s..." % infile_arg)
+                    continue
+            else:
+                disp("Query option not selected, ignoring SVG file...", args, 0)
+                continue
+
+        if ext == 'json':
+            disp("Loading JSON file...", args, 2)
+            try:
+                with open(infile_arg) as config_file:
+                    conf = json.load(config_file)
+                    disp("File loaded. Processing file...", args, 2)
+                    filenames = process_config_file(conf, args)
+                    if args.latex:
+                        print_latex_code(filenames)
+            except Exception:
+                print('File %s is not JSON or has invalid data.' % infile_arg)
+                disp("\nMoving on to the next input file...", args, 2)
+                continue
+
+        #if ext == 'toml':
+            #toml file
+
+        else:
+            print("Invalid file name or format not supported")
+            disp("\nMoving on to the next input file...", args, 2)
+            continue
+
+    disp("\nAll input file processed. Program completed", args, 1)
