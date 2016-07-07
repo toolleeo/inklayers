@@ -27,6 +27,7 @@ import subprocess
 import json
 import logging
 import pytoml as toml
+import glob
 
 from copy import deepcopy
 from lxml import etree
@@ -69,9 +70,11 @@ Behaviour:
     Layers can be selected for inclusion or exclusion.
     If include/exclude options collide, the latest prevails.
 
+    Wildcards for input files are supported.
+
 Examples:
-    %(prog)s file.svg -q
-    lists the avaiable layers in the SVG file.
+    %(prog)s *.svg -q
+    lists the avaiable layers for all the SVG files found in the folder.
 
     %(prog)s file.json -eL0 -e#2-#4
     exports the slides included in the config file by processing the svg file specified
@@ -86,6 +89,12 @@ Examples:
     exports the slides included in the config file by processing the svg file specified
     and sets the output file type
     (overrides the config file setting)
+
+    %(prog)s file.svg file-?.svg file2.json -q -v
+    lists the avaiable layers on: file.svg and any file starting with file-?.svg
+    and also all exports the slides from the file specified in file2.json
+    (level-1 verbosity)
+
 ''')
 
 p_add = parser.add_argument
@@ -398,7 +407,6 @@ def process_config_file(conf, args):
     to the desired options.
     Returns the list of generated files.
     """
-
     infile = load_info_from_config(conf, 'input', 'filename')
     filenames = []
     with open(infile) as f:
@@ -426,7 +434,6 @@ def process_config_file(conf, args):
 
         # process each slide in the config slide
         for index, slide in enumerate(slides):
-
             # if an output file format is not specified in the command line...
             if args.outfile is None:
                 # ...a filename specification in a slide overrides the global one in the config file
@@ -437,7 +444,6 @@ def process_config_file(conf, args):
                     slide_filename_fmt = outfile
             else:
                 slide_filename_fmt = args.outfile
-
             # if a type is not specified in the command line...
             if args.type is None:
                 # ...a type specification in a slide overrides the global one in the config file
@@ -466,7 +472,6 @@ def process_config_file(conf, args):
 
             if args.exclude is not None:
                 filter_layers_by_parameters(args.exclude, 'exclude', layers, tree)
-
 
             save_svg(tree, layers, slide_filename, args=args)
 
@@ -547,14 +552,42 @@ def print_latex_code(filenames):
     for f in filenames:
         print('\\includegraphics[width=1.0\\columnwidth]{%s}' % f)
 
+
+def get_filenames_from_wildcard(argfiles):
+    """
+    Given the input files from the command line,
+    if wild cards are present extracts the corresponding files
+    and add them to the list to return
+
+    Args:
+        argfiles: the input files included in the command line arguments
+
+    Returns:
+        a list of all the files to process
+    """
+    infiles = []
+    for file in argfiles:
+        # if a file has wildcards, process and add results (if any)
+        if ('?' in file) or ('*' in file):
+            globlist = glob.glob(file)
+            for filename in globlist:
+                infiles.append(filename)
+        # if a file doesn't have wildcards just add it
+        else:
+            infiles.append(file)
+    return infiles
+
+
+
+### main
 if __name__ == '__main__':
     # handle command-line arguments
     args = parser.parse_args()
+    args.infiles = get_filenames_from_wildcard(args.infiles)
 
     # load verbosity level
     if (args.debug == True):
         args.verbosity = 2
-
     if (args.verbosity >= 1):
         run = subprocess.check_call
     else:
@@ -562,7 +595,6 @@ if __name__ == '__main__':
 
     # scan all input files
     for infile_arg in args.infiles:
-
         disp("\nProcessing %s file..." %infile_arg, args, 1)
         ext, ext = split_filename(infile_arg)
 
@@ -575,8 +607,9 @@ if __name__ == '__main__':
                     for l in lines:
                         print(l)
                     continue
-                except Exception:
-                    print("Couldn't get layer info from %s..." % infile_arg)
+                except Exception as e:
+                    print(e)
+                    #print("Couldn't get layer info from %s..." % infile_arg)
                     continue
             else:
                 disp("Query option not selected, ignoring SVG file...", args, 0)
@@ -591,11 +624,9 @@ if __name__ == '__main__':
                     if ext == 'toml':
                         conf = toml.load(config_file)
                     filenames = process_config_file(conf, args)
-
                     if args.latex:
                         print_latex_code(filenames)
                         continue
-
             except Exception as e:
                 print(e)
                 #print('File %s is not ' + ext + ' or has invalid data.' % infile_arg)
