@@ -455,24 +455,22 @@ def process_config_file(conf, args):
             else:
                 type_slide = args.type
 
-            (bn, ext) = split_filename(infile)
             # slide filename
+            (bn, ext) = split_filename(infile)
             slide_filename = get_filename(slide_filename_fmt, basename=bn, extension='svg', index=index)
             filenames.append(slide_filename)
             (base_name, extension) = split_filename(slide_filename)
 
-            labels = get_layer_labels(get_layer_objects(tree))
-            logging.debug('labels %s' % str(labels))
-            logging.debug('slide %s' % str(slide))
-            layers = get_filtered_layer_labels(labels, slide)
-            logging.debug('layers %s' % str(layers))
+            # process slide and get the layers
+            layers = get_layers_from_slide(slide, slides, tree)
 
+            # further filtering of layers if command line parameters are used
             if args.add is not None:
                 filter_layers_by_parameters(args.add, 'add', layers, tree)
-
             if args.exclude is not None:
                 filter_layers_by_parameters(args.exclude, 'exclude', layers, tree)
 
+            # save
             save_svg(tree, layers, slide_filename, args=args)
 
             # TODO: add support for automatic file extension
@@ -482,6 +480,86 @@ def process_config_file(conf, args):
             # else:
             svg2file(base_name, type_slide, args)
     return filenames
+
+
+def get_layers_from_slide(slide, slides, tree):
+    """
+    Process the current slide to get the layers
+    to send to inkscape for exporting
+    Args:
+        slide: the current slide examined
+        slides: all the slides in the config file
+        tree: the tree structure
+
+    Returns:
+        layers: the layers of the current slide
+    """
+
+    # checks if the slide has the based-on option
+    # (it's based on another slide)
+    inc = []
+    exc = []
+    slide = check_based_on(slide, slides, inc, exc)
+
+    # get all the labels and filter them using the current slide
+    labels = get_layer_labels(get_layer_objects(tree))
+    logging.debug('labels %s' % str(labels))
+    logging.debug('slide %s' % str(slide))
+    layers = get_filtered_layer_labels(labels, slide)
+    logging.debug('layers %s' % str(layers))
+
+    # if a slide is based on another one add and/or exclude the proper layers
+    # as defined in the config file
+    if inc != []:
+        filter_layers_by_parameters(inc, 'add', layers, tree)
+    if exc != []:
+        filter_layers_by_parameters(exc, 'exclude', layers, tree)
+
+    return layers
+
+
+def check_based_on(slide, slides, inc, exc):
+    """
+    Checks if the slide is based on another one.
+    If that's the case it saves the layers to include/exclude
+    and process the other slide.
+    If the other slide is also based on another one it keeps
+    processing recursively.
+
+    Args:
+        slide: the current slide under examination
+        slides: all the slides in the config file
+        inc: the layers to include from the slide that points to the current slide
+        exc: the layers to exclude from the slide that points to the current slide
+
+    Returns:
+        slide: the current slide (possibly modified if based-on others)
+    """
+
+
+    if 'based-on' in slide:
+        #print(slide.get('based-on'))
+        for s in slides:
+            # if this is the slide it's based-on
+            if s.get('name') == slide.get('based-on'):
+                slideb = s
+                # if the current slide includes or excludes save these layers
+                if 'include' in slide:
+                    i = slide.get('include')
+                    for element in i:
+                        inc.append(element)
+                if 'exclude' in slide:
+                    e = slide.get('exclude')
+                    for elementi in e:
+                        exc.append(element)
+                # if the slide that the current slide is based on is also based on another
+                # repeat the algorithm
+                if 'based-on' in s:
+                    return check_based_on(slideb, slides, inc, exc)
+                slide = slideb
+                break
+
+    return slide
 
 
 def filter_layers_by_parameters(filter, action, layers, tree):
