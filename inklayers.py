@@ -95,6 +95,9 @@ Examples:
     and also all exports the slides from the file specified in file2.json
     (level-1 verbosity)
 
+    %(prog)s file.json -X-S
+    returns a comma separated list of id, x, y, w, and h for all objects
+
 ''')
 
 p_add = parser.add_argument
@@ -110,7 +113,7 @@ p_add('-i', '--inkscape', action='store', default=inkscape_prog,   # metavar='pa
       help='Path to inkscape command line executable')
 p_add('-t', '--type', action='store', default=None, choices=['png', 'ps', 'eps', 'pdf'],
       help='Export type (and suffix). pdf by default. See Inkscape --help for supported formats.')
-p_add('-X', '--extra', action='append', metavar='Inkscape_Export_Options', default=' ',
+p_add('-X', '--extra', action='store', metavar='Inkscape_Export_Options', default=' ',
       help='Extra options passed through (literally) to inkscape for export. See Inkscape --help for more.')
 p_add('-D', '--debug', action='store_true', default=False,
       help='Generates (very) verbose output.')
@@ -118,12 +121,13 @@ p_add('-q', '--query', action='store_true', default=False,
       help='List the available layers.')
 p_add('-v', '--verbosity', action='count', default=0,
       help='Verbosity level.')
-p_add('-s', '--stack', action='store_true', default=False,
-      help='Export all layers in stacked mode. Use -e to exclude some layers.')
-p_add('-S', '--split', action='store_true', default=False,
-      help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
 p_add('-l', '--latex', action='store_true', default=False,
       help='Print code for inclusion into LaTeX documents.')
+group = parser.add_mutually_exclusive_group()
+group.add_argument('-s', '--stack', action='store_true',
+      help='Export all layers in stacked mode (default). Use -e to exclude some layers.')
+group.add_argument('-S', '--split', action='store_true', default=False,
+      help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
 
 
 def disp(msg, args, level):
@@ -194,6 +198,8 @@ def match_label(e, objects):
 
 
 def print_layers(tree):
+    """Prints the layers in the given tree
+    """
     root = tree.getroot()
     for x in root:
         if is_layer(x):
@@ -203,6 +209,10 @@ def print_layers(tree):
 
 
 def save_svg(tree, objects, outfile, args={}):
+    """
+    Saves the svg file given the structure of the input file
+    and the layers to include
+    """
     disp('*** Saving to %s' % outfile, args, 1)
     mytree = deepcopy(tree)
     root = mytree.getroot()
@@ -402,6 +412,45 @@ def load_info_from_config(conf, key1, key2):
         raise Exception("Config file format error: " + key1 + " -> " + key2 + " not found.")
 
 
+def get_overridable_setting(arg, config, key1, key2):
+    """
+    Returns a setting found in the config file
+    If a command line parameter was specified, it overrides the config file setting
+    Args:
+        arg: The command line parameter value
+        config: The input config file
+        key1: The key to search for
+        key2: The subkey to search for
+
+    Returns: the setting found
+
+    """
+    if (arg is None):
+        setting = load_info_from_config(config, key1, key2)
+    else:
+        setting = arg
+    return setting
+
+
+def get_slide_specific_setting(slide, key, arg):
+    """
+    Used to get a slide specific setting (ex. slidename, filetype)
+    If not found, it uses the global setting
+    Args:
+        slide: The slide to process
+        key: The key to search for
+        arg: The global setting
+
+    Returns: The slide setting
+
+    """
+    if key in slide:
+        setting = slide[key]
+    else:
+        setting = arg
+    return setting
+
+
 def process_config_file(conf, args):
     """Manages the generation of svg files and conversions according
     to the desired options.
@@ -415,18 +464,12 @@ def process_config_file(conf, args):
 
         # If a file output format is not specified in the command line, the format in the config file is used.
         # If it's specified, the command line option overrides the config file setting
-        if (args.outfile is None):
-            outfile = load_info_from_config(conf, 'output', 'filename')
-        else:
-            outfile = args.outfile
+        outfile = get_overridable_setting(args.outfile, conf, 'output', 'filename')
         disp("Output file format: %s" % outfile, args, 2)
 
         # If a file type is not specified in the command line, the type from the config file is used.
         # If it's specified, the command line option overrides the config file setting
-        if (args.type is None):
-            dest_type = load_info_from_config(conf, 'output', 'type')
-        else:
-            dest_type = args.type
+        dest_type = get_overridable_setting(args.type, conf, 'output', 'type')
         disp("Destination type: %s" % dest_type, args, 2)
 
         # get slides from config file
@@ -437,21 +480,15 @@ def process_config_file(conf, args):
             # if an output file format is not specified in the command line...
             if args.outfile is None:
                 # ...a filename specification in a slide overrides the global one in the config file
-                if 'filename' in slide:
-                    slide_filename_fmt = slide['filename']
-                    disp("Output file format for this slide: %s" % slide_filename_fmt, args, 2)
-                else:
-                    slide_filename_fmt = outfile
+                slide_filename_fmt = get_slide_specific_setting(slide, 'filename', outfile)
+                disp("Output file format for this slide: %s" % slide_filename_fmt, args, 2)
             else:
                 slide_filename_fmt = args.outfile
             # if a type is not specified in the command line...
             if args.type is None:
                 # ...a type specification in a slide overrides the global one in the config file
-                if 'type' in slide:
-                    type_slide = slide['type']
-                    disp("Destination type for this slide: %s" % type_slide, args, 2)
-                else:
-                    type_slide = dest_type
+                type_slide = get_slide_specific_setting(slide, 'type', dest_type)
+                disp("Destination type for this slide: %s" % type_slide, args, 2)
             else:
                 type_slide = args.type
 
@@ -470,15 +507,28 @@ def process_config_file(conf, args):
             if args.exclude is not None:
                 filter_layers_by_parameters(args.exclude, 'exclude', layers, tree)
 
-            # save
-            save_svg(tree, layers, slide_filename, args=args)
+            # If the split option is used, save each layer to different svg and output files
+            # format: name-split-index
+            if args.split == True:
+                for index, l in enumerate(layers):
+                    split_label = "-split-" + str(index)
+                    slide_filename = base_name + split_label + "." + extension
+                    layer = []
+                    layer.append(l)  # for compatibility with the match_label function we need a list
+                    save_svg(tree, layer, slide_filename, args=args)
+                    svg2file(base_name + split_label, type_slide, args)
+            else:
+                # Saves slides to single files (default)
+                # if layers is not an empty list (in case all layers are excluded)
+                if layers != []:
+                    save_svg(tree, layers, slide_filename, args=args)
+                    # TODO: add support for automatic file extension
+                    # convert the svg file into the desired format
+                    # if out['type'] == 'auto':
+                    #     filetype = get_file_type_from_filename(outfile)
+                    # else:
+                    svg2file(base_name, type_slide, args)
 
-            # TODO: add support for automatic file extension
-            # convert the svg file into the desired format
-            # if out['type'] == 'auto':
-            #     filetype = get_file_type_from_filename(outfile)
-            # else:
-            svg2file(base_name, type_slide, args)
     return filenames
 
 
@@ -490,11 +540,9 @@ def get_layers_from_slide(slide, slides, tree):
         slide: the current slide examined
         slides: all the slides in the config file
         tree: the tree structure
-
     Returns:
         layers: the layers of the current slide
     """
-
     # checks if the slide has the based-on option
     # (it's based on another slide)
     inc = []
@@ -525,18 +573,14 @@ def check_based_on(slide, slides, inc, exc):
     and process the other slide.
     If the other slide is also based on another one it keeps
     processing recursively.
-
     Args:
         slide: the current slide under examination
         slides: all the slides in the config file
         inc: the layers to include from the slide that points to the current slide
         exc: the layers to exclude from the slide that points to the current slide
-
     Returns:
         slide: the current slide (possibly modified if based-on others)
     """
-
-
     if 'based-on' in slide:
         #print(slide.get('based-on'))
         for s in slides:
@@ -558,7 +602,6 @@ def check_based_on(slide, slides, inc, exc):
                     return check_based_on(slideb, slides, inc, exc)
                 slide = slideb
                 break
-
     return slide
 
 
@@ -571,9 +614,6 @@ def filter_layers_by_parameters(filter, action, layers, tree):
         action: how to handle the layers ('add' or 'exclude')
         layers: the layers of the current slide after previous filtering
         tree: the tree structure of the config file
-
-    Returns:
-        -
     """
     # get all the labels in the file
     labels_fil = get_layer_labels(get_layer_objects(tree))
@@ -627,6 +667,9 @@ def report_layers_info(infile):
 
 
 def print_latex_code(filenames):
+    """
+    Print code for inclusion into LaTeX documents.
+    """
     for f in filenames:
         print('\\includegraphics[width=1.0\\columnwidth]{%s}' % f)
 
@@ -636,10 +679,8 @@ def get_filenames_from_wildcard(argfiles):
     Given the input files from the command line,
     if wild cards are present extracts the corresponding files
     and add them to the list to return
-
     Args:
         argfiles: the input files included in the command line arguments
-
     Returns:
         a list of all the files to process
     """
@@ -654,7 +695,6 @@ def get_filenames_from_wildcard(argfiles):
         else:
             infiles.append(file)
     return infiles
-
 
 
 ### main
