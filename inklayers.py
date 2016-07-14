@@ -26,6 +26,9 @@ import sys
 import subprocess
 import json
 import logging
+import pytoml as toml
+import glob
+
 from copy import deepcopy
 from lxml import etree
 
@@ -42,82 +45,89 @@ xpath_namespaces = {'svg': "http://www.w3.org/2000/svg",
                     'xlink': "http://www.w3.org/1999/xlink",
                     're': "http://exslt.org/regular-expressions"}
 
-# usually not code change below this line is necessary. any improvement suggestions is welcome.
 # parse options
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
-                                 description='''Exports multiple objects from an SVG file to various formats (PNG, SVG, PS, EPS, PDF).''',
-                                 usage="%(prog)s [-h] [-p PATTERN] [options] infiles+",
-                                 epilog='''requirements
-    This program requires Inkscape 0.48+ and Python 2.7+
+            description='''Exports combinations of layers from an SVG file to various formats (PDF, PNG, etc.).''',
+            usage="%(prog)s [-h] infiles+ [options]",
+            epilog='''
 
-default behaviour:
-    The program exports by default all objects with an ID that has not
-    been generated automatically by Inkscape.
+Requirements
+    This program requires Inkscape 0.48+ and Python 3.0+
+    Tested with Inkscape version 0.91.
 
-    If you provide a custom pattern (-p) or xpath expression (-x), then exclude
-    (-e) is by default turned off, that is: your custom pattern or expression is
-    used to define wich objects	are *included* unless you specify -e.
+Behaviour:
+    The program exports any combination of SVG layers to files.
+    By default the exported file is in SVG format.
+    If Inkscape is found in the system, an automatic conversion to
+    Inkscape supported formats (png, pdf, ps, eps) can be done.
 
-examples:
+    Multiple config file formats are currently supported: JSON and TOML.
 
-  %(prog)s --pattern '^export' in.svg
-     exports all objects with an ID starting with 'export' from in.svg
-     to PNG files in the current directory.
+    Layers can be referenced by label or index (#0, #1, ...).
+    The first layer has index 0.
+    Layer's interval is supported. Example format: #1-#9.
 
-  %(prog)s --exclude --xpath '//svg:g | //svg:rect' in.svg
-      exports all objects that are no SVG group or rectangle, from in.svg to
-      PNG files in current working directory. Namespaces available are: svg,
-      inkscape, sodipodi, xlink, re (for regular expressions).
-      See http://lxml.de for more on xpath in this program.
+    Layers can be selected for inclusion or exclusion.
+    If include/exclude options collide, the latest prevails.
 
-  %(prog)s --pattern '^(obj1|obj4)$' --prefix 'FILE_' in1.svg in2.svg
-     exports objects with IDs 'obj1' and 'obj4', from both in1 and in2
-     files, to PNG files named in1_obj1.png, in1_obj4.png, in2_obj1.png
-     and    in2_obj4.png.
+    Wildcards for input files are supported.
 
-  %(prog)s --silent --force --type eps --destdir vector/  ~/*.svg ~/tmp/*.svg
-    exports all objects with an ID that does not resemble Inkscape
-    default IDs, from any SVG file in user's home and tmp directories,
-    to ./vector/ directory as EPS files, with no information displayed and
-    overwritting existing files
+Examples:
+    %(prog)s *.svg -q
+    lists the avaiable layers for all the SVG files found in the folder.
 
-  %(prog)s --exclude --pattern '[0-9]' --extra '--export-dpi 900' in.svg
-    exports all objects with an ID containing no digit, from in.svg file,
-    as PNG images with a resolution for    rasterization of 900 dpi. As
-    Inkscape uses 90 by default, this results in 10-times bigger images.
+    %(prog)s file.json -eL0 -e#2-#4
+    exports the slides included in the config file by processing the svg file specified
+    and excludes the layers labelled "L0", #2, #3, #4
 
+    %(prog)s file.json -o(format)
+    exports the slides included in the config file by processing the svg file specified
+    and sets the output filename format (number-basename.extension for example)
+    (overrides the config file setting)
 
-Additional examples: https://github.com/berteh/svg-objects-export/wiki
+    %(prog)s file.json -tpng
+    exports the slides included in the config file by processing the svg file specified
+    and sets the output file type
+    (overrides the config file setting)
+
+    %(prog)s file.svg file-?.svg file2.json -q -v
+    lists the avaiable layers on: file.svg and any file starting with file-?.svg
+    and also all exports the slides from the file specified in file2.json
+    (level-1 verbosity)
+
+    %(prog)s file.json -X-S
+    returns a comma separated list of id, x, y, w, and h for all objects
 
 ''')
 
 p_add = parser.add_argument
 p_add('infiles', nargs='+',
-      help='SVG or JSON file, wildcards supported')
-p_add('-a', '--add', action='store_true', default=0,
+      help='SVG, JSON or TOML file, wildcards supported')
+p_add('-a', '--add', action='append', default=None,
       help='Add layers to export. Use labels or indexes.')
-p_add('-e', '--exclude', action='store_true', default=0,
+p_add('-e', '--exclude', action='append', default=None,
       help='Use label or index to determine which objects to exclude from export')
-p_add('-o', '--outfile', default='FILE_',
+p_add('-o', '--outfile', action='store', default=None, choices=['%b-%n.%e', '%b_%n.%e', '%n-%b.%e'],
       help='Output file format. See documentation for possible formats.')
-p_add('-i', '--inkscape', default=inkscape_prog,   # metavar='path_to_inkscape',
+p_add('-i', '--inkscape', action='store', default=inkscape_prog,   # metavar='path_to_inkscape',
       help='Path to inkscape command line executable')
-p_add('-t', '--type', default='pdf', choices=['png', 'ps', 'eps', 'pdf'],
+p_add('-t', '--type', action='store', default=None, choices=['png', 'ps', 'eps', 'pdf'],
       help='Export type (and suffix). pdf by default. See Inkscape --help for supported formats.')
-p_add('-X', '--extra', metavar='Inkscape_Export_Options', default=' ',
+p_add('-X', '--extra', action='store', metavar='Inkscape_Export_Options', default=' ',
       help='Extra options passed through (literally) to inkscape for export. See Inkscape --help for more.')
 p_add('-D', '--debug', action='store_true', default=False,
       help='Generates (very) verbose output.')
 p_add('-q', '--query', action='store_true', default=False,
       help='List the available layers.')
-p_add('-v', '--verbosity', default=0,
+p_add('-v', '--verbosity', action='count', default=0,
       help='Verbosity level.')
-p_add('-s', '--stack', action='store_true', default=False,
-      help='Export all layers in stacked mode. Use -e to exclude some layers.')
-p_add('-S', '--split', action='store_true', default=False,
-      help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
 p_add('-l', '--latex', action='store_true', default=False,
       help='Print code for inclusion into LaTeX documents.')
+group = parser.add_mutually_exclusive_group()
+group.add_argument('-s', '--stack', action='store_true',
+      help='Export all layers in stacked mode (default). Use -e to exclude some layers.')
+group.add_argument('-S', '--split', action='store_true', default=False,
+      help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
 
 
 def disp(msg, args, level):
@@ -188,6 +198,8 @@ def match_label(e, objects):
 
 
 def print_layers(tree):
+    """Prints the layers in the given tree
+    """
     root = tree.getroot()
     for x in root:
         if is_layer(x):
@@ -197,10 +209,13 @@ def print_layers(tree):
 
 
 def save_svg(tree, objects, outfile, args={}):
+    """
+    Saves the svg file given the structure of the input file
+    and the layers to include
+    """
     disp('*** Saving to %s' % outfile, args, 1)
     mytree = deepcopy(tree)
     root = mytree.getroot()
-    # print(etree.tostring(root, pretty_print=True))
     for x in root:
         if is_layer(x) and not match_label(x, objects):
             root.remove(x)
@@ -210,7 +225,7 @@ def save_svg(tree, objects, outfile, args={}):
     except:
         pass
     with open(outfile, 'w') as f:
-        f.write(etree.tostring(mytree, pretty_print=True))
+        f.write(etree.tostring(mytree, encoding="unicode", pretty_print=True))
 
 
 def inkscape_installed(args):
@@ -284,6 +299,9 @@ def parse_interval_string(s):
 
 
 def get_filename(fmt, basename=None, extension=None, index=None):
+    """
+    Returns a file name given a file format (ex. %b-%n.%e)
+    """
     if fmt.find('%b') > 0 and basename is None:
         return None
     if basename is not None:
@@ -364,71 +382,259 @@ def get_filtered_layer_labels(labels, filters):
     return l
 
 
-def process_config_file(conf, args):
-    """Manages the generation of svg files and conversions according
-    with the desired options.
-    Returns the list of generated files.
+def etree_test(tree):
+    root = tree.getroot()
+    print(etree.tostring(root, encoding="unicode", pretty_print=True))
+    for x in root:
+        print('%s %s' % (x.tag, x.get('{http://www.inkscape.org/namespaces/inkscape}label')))
+        print('%s %s' % (x.tag, x.keys()))
+        print('%s %s' % (x.tag, x.get('id')))
+
+
+def load_info_from_config(conf, key1, key2):
+    """Loads the settings from the config file
+    using the keys provided
+    (Examples: the input svg file, the output file type,
+    the output file format and the slides)
+
+    Args:
+        conf: The config file to be processed
+        key1: The key to search for
+        key2: The subkey to search for
+
+    Returns:
+        The value associated with the keys
+        (or an exception message to be catched by the main program)
     """
     try:
-        infile = conf['input']['filename']
+        return conf[key1][key2]
     except:
-        print('JSON format error: input -> filename not found.')
-        return
+        raise Exception("Config file format error: " + key1 + " -> " + key2 + " not found.")
+
+
+def get_overridable_setting(arg, config, key1, key2):
+    """
+    Returns a setting found in the config file
+    If a command line parameter was specified, it overrides the config file setting
+    Args:
+        arg: The command line parameter value
+        config: The input config file
+        key1: The key to search for
+        key2: The subkey to search for
+
+    Returns: the setting found
+
+    """
+    if (arg is None):
+        setting = load_info_from_config(config, key1, key2)
+    else:
+        setting = arg
+    return setting
+
+
+def get_slide_specific_setting(slide, key, arg):
+    """
+    Used to get a slide specific setting (ex. slidename, filetype)
+    If not found, it uses the global setting
+    Args:
+        slide: The slide to process
+        key: The key to search for
+        arg: The global setting
+
+    Returns: The slide setting
+
+    """
+    if key in slide:
+        setting = slide[key]
+    else:
+        setting = arg
+    return setting
+
+
+def process_config_file(conf, args):
+    """Manages the generation of svg files and conversions according
+    to the desired options.
+    Returns the list of generated files.
+    """
+    infile = load_info_from_config(conf, 'input', 'filename')
     filenames = []
     with open(infile) as f:
         tree = etree.parse(f)
-        # root = tree.getroot()
-        # print(etree.tostring(root, pretty_print=True))
-        # for x in root:
-        #     print('%s %s' % (x.tag, x.get('{http://www.inkscape.org/namespaces/inkscape}label')))
-        #     print('%s %s' % (x.tag, x.keys()))
-        #     # print('%s %s' % (x.tag, x.get('id')))
-        try:
-            outfile = conf['output']['filename']
-        except Exception:
-            print('JSON format error on "output -> filename" field.')
-            return
-        try:
-            dest_type = conf['output']['type']
-        except Exception:
-            print('JSON format error on "output -> type" field.')
-            return
-        try:
-            slides = conf['output']['slides']
-        except Exception:
-            print('JSON format error on "output -> slides" field.')
-            return
-        for index, slide in enumerate(slides):
-            # a filename specification in a slide overrides the global one
-            if 'filename' in slide:
-                slide_filename_fmt = slide['filename']
-            else:
-                slide_filename_fmt = outfile
-            # a type specification in a slide overrides the global one
-            if 'type' in slide:
-                type_slide = slide['type']
-            else:
-                type_slide = dest_type
+        # etree_test(tree)
 
+        # If a file output format is not specified in the command line, the format in the config file is used.
+        # If it's specified, the command line option overrides the config file setting
+        outfile = get_overridable_setting(args.outfile, conf, 'output', 'filename')
+        disp("Output file format: %s" % outfile, args, 2)
+
+        # If a file type is not specified in the command line, the type from the config file is used.
+        # If it's specified, the command line option overrides the config file setting
+        dest_type = get_overridable_setting(args.type, conf, 'output', 'type')
+        disp("Destination type: %s" % dest_type, args, 2)
+
+        # get slides from config file
+        slides = load_info_from_config(conf, 'output', 'slides')
+
+        # process each slide in the config slide
+        for index, slide in enumerate(slides):
+            # if an output file format is not specified in the command line...
+            if args.outfile is None:
+                # ...a filename specification in a slide overrides the global one in the config file
+                slide_filename_fmt = get_slide_specific_setting(slide, 'filename', outfile)
+                disp("Output file format for this slide: %s" % slide_filename_fmt, args, 2)
+            else:
+                slide_filename_fmt = args.outfile
+            # if a type is not specified in the command line...
+            if args.type is None:
+                # ...a type specification in a slide overrides the global one in the config file
+                type_slide = get_slide_specific_setting(slide, 'type', dest_type)
+                disp("Destination type for this slide: %s" % type_slide, args, 2)
+            else:
+                type_slide = args.type
+
+            # slide filename
             (bn, ext) = split_filename(infile)
             slide_filename = get_filename(slide_filename_fmt, basename=bn, extension='svg', index=index)
             filenames.append(slide_filename)
             (base_name, extension) = split_filename(slide_filename)
-            labels = get_layer_labels(get_layer_objects(tree))
-            logging.debug('labels %s' % str(labels))
-            logging.debug('slide %s' % str(slide))
-            layers = get_filtered_layer_labels(labels, slide)
-            logging.debug('layers %s' % str(layers))
 
-            save_svg(tree, layers, slide_filename, args=args)
+            # process slide and get the layers
+            layers = get_layers_from_slide(slide, slides, tree)
 
-            # TODO: add support for automatic file extension
-            # convert the svg file into the desired format
-            # if out['type'] == 'auto':
-            #     filetype = get_file_type_from_filename(outfile)
-            # else:
-            svg2file(base_name, type_slide, args)
+            # further filtering of layers if command line parameters are used
+            if args.add is not None:
+                filter_layers_by_parameters(args.add, 'add', layers, tree)
+            if args.exclude is not None:
+                filter_layers_by_parameters(args.exclude, 'exclude', layers, tree)
+
+            # If the split option is used, save each layer to different svg and output files
+            # format: name-split-index
+            if args.split == True:
+                for index, l in enumerate(layers):
+                    split_label = "-split-" + str(index)
+                    slide_filename = base_name + split_label + "." + extension
+                    layer = []
+                    layer.append(l)  # for compatibility with the match_label function we need a list
+                    save_svg(tree, layer, slide_filename, args=args)
+                    svg2file(base_name + split_label, type_slide, args)
+            else:
+                # Saves slides to single files (default)
+                # if layers is not an empty list (in case all layers are excluded)
+                if layers != []:
+                    save_svg(tree, layers, slide_filename, args=args)
+                    # TODO: add support for automatic file extension
+                    # convert the svg file into the desired format
+                    # if out['type'] == 'auto':
+                    #     filetype = get_file_type_from_filename(outfile)
+                    # else:
+                    svg2file(base_name, type_slide, args)
+
     return filenames
+
+
+def get_layers_from_slide(slide, slides, tree):
+    """
+    Process the current slide to get the layers
+    to send to inkscape for exporting
+    Args:
+        slide: the current slide examined
+        slides: all the slides in the config file
+        tree: the tree structure
+    Returns:
+        layers: the layers of the current slide
+    """
+    # checks if the slide has the based-on option
+    # (it's based on another slide)
+    inc = []
+    exc = []
+    slide = check_based_on(slide, slides, inc, exc)
+
+    # get all the labels and filter them using the current slide
+    labels = get_layer_labels(get_layer_objects(tree))
+    logging.debug('labels %s' % str(labels))
+    logging.debug('slide %s' % str(slide))
+    layers = get_filtered_layer_labels(labels, slide)
+    logging.debug('layers %s' % str(layers))
+
+    # if a slide is based on another one add and/or exclude the proper layers
+    # as defined in the config file
+    if inc != []:
+        filter_layers_by_parameters(inc, 'add', layers, tree)
+    if exc != []:
+        filter_layers_by_parameters(exc, 'exclude', layers, tree)
+
+    return layers
+
+
+def check_based_on(slide, slides, inc, exc):
+    """
+    Checks if the slide is based on another one.
+    If that's the case it saves the layers to include/exclude
+    and process the other slide.
+    If the other slide is also based on another one it keeps
+    processing recursively.
+    Args:
+        slide: the current slide under examination
+        slides: all the slides in the config file
+        inc: the layers to include from the slide that points to the current slide
+        exc: the layers to exclude from the slide that points to the current slide
+    Returns:
+        slide: the current slide (possibly modified if based-on others)
+    """
+    if 'based-on' in slide:
+        #print(slide.get('based-on'))
+        for s in slides:
+            # if this is the slide it's based-on
+            if s.get('name') == slide.get('based-on'):
+                slideb = s
+                # if the current slide includes or excludes save these layers
+                if 'include' in slide:
+                    i = slide.get('include')
+                    for element in i:
+                        inc.append(element)
+                if 'exclude' in slide:
+                    e = slide.get('exclude')
+                    for elementi in e:
+                        exc.append(element)
+                # if the slide that the current slide is based on is also based on another
+                # repeat the algorithm
+                if 'based-on' in s:
+                    return check_based_on(slideb, slides, inc, exc)
+                slide = slideb
+                break
+    return slide
+
+
+def filter_layers_by_parameters(filter, action, layers, tree):
+    """
+    Modifies the layers of the current slide to add or exclude
+    the layers specified in the command line
+    Args:
+        filter: the layers to add or exclude
+        action: how to handle the layers ('add' or 'exclude')
+        layers: the layers of the current slide after previous filtering
+        tree: the tree structure of the config file
+    """
+    # get all the labels in the file
+    labels_fil = get_layer_labels(get_layer_objects(tree))
+    # creates a slide with the layers to include or exclude
+    slide_fil = {'include': filter}
+    # get the layers as labels from slide_fil
+    layers_fil = get_filtered_layer_labels(labels_fil, slide_fil)
+
+    if action == 'add':
+        for x in layers_fil:
+            if x not in layers:
+                disp("*Layer %s added" % x, args, 2)
+                layers.append(x)
+
+    if action == 'exclude':
+        for x in layers_fil:
+            if x in layers:
+                disp("*Layer %s excluded" % x, args, 2)
+                layers.remove(x)
+
+    return
 
 
 def get_layer_objects(tree):
@@ -461,31 +667,93 @@ def report_layers_info(infile):
 
 
 def print_latex_code(filenames):
+    """
+    Print code for inclusion into LaTeX documents.
+    """
     for f in filenames:
         print('\\includegraphics[width=1.0\\columnwidth]{%s}' % f)
 
+
+def get_filenames_from_wildcard(argfiles):
+    """
+    Given the input files from the command line,
+    if wild cards are present extracts the corresponding files
+    and add them to the list to return
+    Args:
+        argfiles: the input files included in the command line arguments
+    Returns:
+        a list of all the files to process
+    """
+    infiles = []
+    for file in argfiles:
+        # if a file has wildcards, process and add results (if any)
+        if ('?' in file) or ('*' in file):
+            globlist = glob.glob(file)
+            for filename in globlist:
+                infiles.append(filename)
+        # if a file doesn't have wildcards just add it
+        else:
+            infiles.append(file)
+    return infiles
+
+
+### main
 if __name__ == '__main__':
     # handle command-line arguments
     args = parser.parse_args()
-    if args.verbosity >= 1:
+    args.infiles = get_filenames_from_wildcard(args.infiles)
+
+    # load verbosity level
+    if (args.debug == True):
+        args.verbosity = 2
+    if (args.verbosity >= 1):
         run = subprocess.check_call
     else:
         run = subprocess.check_output
 
-    if args.query:
-        for infile_arg in args.infiles:
-            print('* Layers in %s' % infile_arg)
-            lines = report_layers_info(infile_arg)
-            for l in lines:
-                print(l)
-        sys.exit(0)
-
+    # scan all input files
     for infile_arg in args.infiles:
-        # try:
-        with open(infile_arg) as config_file:
-            conf = json.load(config_file)
-            filenames = process_config_file(conf, args)
-            if args.latex:
-                print_latex_code(filenames)
-        # except Exception:
-        #     print('File %s is not JSON.' % infile_arg)
+        disp("\nProcessing %s file..." %infile_arg, args, 1)
+        ext, ext = split_filename(infile_arg)
+
+        if ext == 'svg':
+            if args.query:
+                disp("Executing query...", args, 2)
+                try:
+                    print('\n* Layers in %s' % infile_arg)
+                    lines = report_layers_info(infile_arg)
+                    for l in lines:
+                        print(l)
+                    continue
+                except Exception as e:
+                    print(e)
+                    #print("Couldn't get layer info from %s..." % infile_arg)
+                    continue
+            else:
+                disp("Query option not selected, ignoring SVG file...", args, 0)
+                continue
+
+        if (ext == 'json') or (ext == 'toml'):
+            disp("Loading " + ext.upper() + " file...", args, 2)
+            try:
+                with open(infile_arg) as config_file:
+                    if ext == 'json':
+                        conf = json.load(config_file)
+                    if ext == 'toml':
+                        conf = toml.load(config_file)
+                    filenames = process_config_file(conf, args)
+                    if args.latex:
+                        print_latex_code(filenames)
+                        continue
+            except Exception as e:
+                print(e)
+                #print('File %s is not ' + ext + ' or has invalid data.' % infile_arg)
+                disp("\nMoving on to the next input file...", args, 2)
+                continue
+
+        else:
+            print("Invalid file name or format not supported")
+            disp("\nMoving on to the next input file...", args, 2)
+            continue
+
+    disp("\nAll input files processed. Program completed", args, 1)

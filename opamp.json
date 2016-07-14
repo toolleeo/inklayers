@@ -1,0 +1,16 @@
+{
+    "input" : {
+        "filename" : "opamp.svg"
+    },
+    "output" : {
+        "type" : "pdf",
+        "filename": "%b-%n.%e",
+        "slides": [
+            {"name" : "title", "include" : ["#0"]},
+            {"name" : "base", "include" : ["#0-#1"]},
+            {"name" : "power", "include" : ["#0-#2"]},
+            {"name" : "inv", "based-on" : "base", "include" : ["#3-#4"]},
+            {"name" : "noninv", "based-on" : "base", "include" : ["#3", "#5"]}
+        ]
+    }
+}

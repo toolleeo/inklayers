@@ -1,0 +1,56 @@
+[input]
+filename = "fishes.svg"
+
+[output]
+type = "png"
+filename = "%b-%n.%e"
+
+[[output.slides]]
+include = ["L0"]
+
+[[output.slides]]
+include = ["L0", "L1"]
+
+[[output.slides]]
+include = ["#0-#2"]
+
+[[output.slides]]
+include = ["#0-#3"]
+
+[[output.slides]]
+include = ["#0-#4"]
+
+[[output.slides]]
+include = ["#0-#5"]
+
+[[output.slides]]
+include = ["#0-#6"]
+exclude = ["L5 msg:greetings"]
+
+[[output.slides]]
+include = ["#0-#7"]
+exclude = ["L5 msg:greetings"]
+
+[[output.slides]]
+include = ["#0-#8"]
+exclude = ["L5 msg:greetings"]
+
+[[output.slides]]
+include = ["#0-#9"]
+exclude = ["L5 msg:greetings"]
+
+[[output.slides]]
+include = ["#0-#10"]
+exclude = ["L5 msg:greetings"]
+
+[[output.slides]]
+include = ["#0-#11"]
+exclude = ["L5 msg:greetings"]
+
+[[output.slides]]
+include = ["#0-#12"]
+exclude = ["L5 msg:greetings"]
+
+[[output.slides]]
+include = ["#0-#12"]
+exclude = ["L5 msg:greetings", "L12 msg:reply"]
