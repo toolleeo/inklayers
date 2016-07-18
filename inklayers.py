@@ -285,6 +285,9 @@ def parse_interval_string(s):
     for i in s.split(','):
         tokens = i.split('-')
         tokens = [x.strip() for x in tokens]
+        for x in tokens:
+            if x[0] != '#':
+                return None
         try:
             intvals = [int(x[1:]) for x in tokens]
         except Exception:

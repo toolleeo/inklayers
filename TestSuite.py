@@ -92,6 +92,12 @@ class TestSuite(unittest.TestCase):
         intervals = inklayers.parse_interval_string('#0-#1-#2')
         self.assertEqual(intervals, None)
 
+    # This test works now ( previously it expected: [(1, 1)] )
+    def test_parse_interval_string_wrong_format_5(self):
+        intervals = inklayers.parse_interval_string('L1')
+        self.assertEqual(intervals, None)
+
+
     # Tests for the inclusion/exclusion of layers in one slide
 
     def test_layer_filtering_no_inclusion(self):
@@ -105,6 +111,13 @@ class TestSuite(unittest.TestCase):
         filters = {'include': ['L0', 'L2']}
         layers = inklayers.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, ['L0', 'L2'])
+
+    # this test works now (previously it expected: ['L3', 'quarto']
+    def test_layer_filtering_inclusion_of_labels_with_numbers(self):
+        labels = ['primo', 'secondo', 'L3', 'quarto', 'quinto']
+        filters = {'include': ['L3']}
+        layers = inklayers.get_filtered_layer_labels(labels, filters)
+        self.assertEqual(layers, ['L3'])
 
     def test_layer_filtering_included_1_interval_exclude_1_label(self):
         labels = ['L0', 'L1', 'L2', 'L3', 'L4']
@@ -130,6 +143,7 @@ class TestSuite(unittest.TestCase):
         filters = {"include": ["#0-#6"], "exclude": ["L5 msg:greetings"]}
         layers = inklayers.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, ['L0', 'L1', 'L2', 'L3', 'L4', 'L6'])
+
 
     # Tests the inclusion of a number into a list of intervals
 
