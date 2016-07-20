@@ -97,6 +97,14 @@ class TestSuite(unittest.TestCase):
         intervals = inklayers.parse_interval_string('L1')
         self.assertEqual(intervals, None)
 
+    def test_parse_interval_string_wrong_format_6(self):
+        intervals = inklayers.parse_interval_string('L#1')
+        self.assertEqual(intervals, None)
+
+    def test_parse_interval_string_wrong_format_7(self):
+        intervals = inklayers.parse_interval_string('#L1')
+        self.assertEqual(intervals, None)
+
 
     # Tests for the inclusion/exclusion of layers in one slide
 
@@ -118,6 +126,12 @@ class TestSuite(unittest.TestCase):
         filters = {'include': ['L3']}
         layers = inklayers.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, ['L3'])
+
+    def test_layer_filtering_inclusion_of_labels_with_numbers2(self):
+        labels = ['primo', 'secondo', 'L3', 'quarto', 'quinto']
+        filters = {'include': ['L3', 'quinto']}
+        layers = inklayers.get_filtered_layer_labels(labels, filters)
+        self.assertEqual(layers, ['L3', 'quinto'])
 
     def test_layer_filtering_included_1_interval_exclude_1_label(self):
         labels = ['L0', 'L1', 'L2', 'L3', 'L4']
@@ -201,6 +215,133 @@ class TestSuite(unittest.TestCase):
         self._test_number(60, intervals, True)
         self._test_number(70, intervals, True)
         self._test_number(71, intervals, False)
+
+
+    # Tests the loading of information from config files
+    def test_load_info_from_config(self):
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            key1 = 'input'
+            key2 = 'filename'
+            ret = inklayers.load_info_from_config(conf, key1, key2)
+            self.assertEqual(ret, 'fishes.svg')
+
+    def test_load_info_from_config_error(self):
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            key1 = 'inpu'
+            key2 = 'filename'
+            self.assertRaises(Exception, inklayers.load_info_from_config, conf, key1, key2)
+
+    # Tests the loading of settings that can be overriden by command line parameters
+    def test_overridable_setting(self):
+        type = 'png' # type specified in command line
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            dest_type = inklayers.get_overridable_setting(type, conf, 'output', 'type')
+            self.assertEqual(dest_type, 'png')
+
+    def test_overridable_setting_no_overriding(self):
+        type = None  # nothing specified in command line
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            dest_type = inklayers.get_overridable_setting(type, conf, 'output', 'type')
+            self.assertEqual(dest_type, 'pdf')
+
+    def test_overridable_setting_wrong_keys(self):
+        type = None
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            self.assertRaises(Exception, inklayers.get_overridable_setting, type, conf, 'input', 'type')
+
+    # Tests the loading of slide specific settings (a different file type for example)
+    def test_slide_specific_setting(self):
+        slide = {"include": ["L0"], "type": 'png'}
+        key = 'type'
+        global_type = 'pdf'
+        setting = inklayers.get_slide_specific_setting(slide, key, global_type)
+        self.assertEqual(setting, 'png')
+
+    def test_slide_specific_setting_missing(self):
+        slide = {"include": ["L0"]}
+        key = 'type'
+        global_type = 'pdf'
+        setting = inklayers.get_slide_specific_setting(slide, key, global_type)
+        self.assertEqual(setting, global_type)
+
+    # Tests the retrieval of layers from a slide
+    def test_get_layers_from_slide(self):
+        slide = {"include": ["#0-#6"], "exclude": ["L5 msg:greetings"]}
+        with open('fishes.svg') as f:
+            tree = etree.parse(f)
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            slides = inklayers.load_info_from_config(conf, 'output', 'slides')
+        layers = inklayers.get_layers_from_slide(slide, slides, tree)
+        self.assertEqual(layers, ['L0', 'L1', 'L2', 'L3', 'L4', 'L6'])
+
+    def test_get_layers_from_empty_slide(self):
+        slide = {}
+        with open('fishes.svg') as f:
+            tree = etree.parse(f)
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            slides = inklayers.load_info_from_config(conf, 'output', 'slides')
+        layers = inklayers.get_layers_from_slide(slide, slides, tree)
+        self.assertEqual(layers, [])
+
+    def test_get_layers_from_slide_with_wrong_layers(self):
+        slide = {"include": ["#20-#26"]}
+        with open('fishes.svg') as f:
+            tree = etree.parse(f)
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            slides = inklayers.load_info_from_config(conf, 'output', 'slides')
+        layers = inklayers.get_layers_from_slide(slide, slides, tree)
+        self.assertEqual(layers, [])
+
+    # Tests the based-on option
+    def test_based_on_none(self):
+        slide = {"include": ["L0"]}
+        with open('fishes.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            slides = inklayers.load_info_from_config(conf, 'output', 'slides')
+        inc = []
+        exc = []
+        s = inklayers.check_based_on(slide, slides, inc, exc)
+        self.assertEqual(s, slide)
+
+    def test_based_on_one(self):
+        slide = {"name": "moon", "based-on": "night sky", "include": ["#7"]}
+        with open('fishes2.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            slides = inklayers.load_info_from_config(conf, 'output', 'slides')
+        inc = []
+        exc = []
+        s = inklayers.check_based_on(slide, slides, inc, exc)
+        self.assertEqual(s, {"name": "night sky", "include": ["#0-#6"], "exclude": ["L5 msg:greetings"]})
+
+    def test_based_on_multiple(self):
+        slide = {"name": "1star", "based-on": "moon", "include": ["#8"]}
+        with open('fishes2.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            slides = inklayers.load_info_from_config(conf, 'output', 'slides')
+        inc = []
+        exc = []
+        s = inklayers.check_based_on(slide, slides, inc, exc)
+        self.assertEqual(s, {'include': ['#0-#6'], 'exclude': ['L5 msg:greetings'], 'name': 'night sky'})
+
+    def test_get_layers_from_slide_with_based_on(self):
+        slide = {"name": "1star", "based-on": "moon", "include": ["#8"]}
+        with open('fishes.svg') as f:
+            tree = etree.parse(f)
+        with open('fishes2.json') as config_file:
+            conf = inklayers.json.load(config_file)
+            slides = inklayers.load_info_from_config(conf, 'output', 'slides')
+        layers = inklayers.get_layers_from_slide(slide, slides, tree)
+        self.assertEqual(layers, ['L0', 'L1', 'L2', 'L3', 'L4', 'L6', 'L7', 'L8'])
+
+
 
 if __name__ == '__main__':
     unittest.main()

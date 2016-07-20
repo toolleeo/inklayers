@@ -597,7 +597,7 @@ def check_based_on(slide, slides, inc, exc):
                         inc.append(element)
                 if 'exclude' in slide:
                     e = slide.get('exclude')
-                    for elementi in e:
+                    for element in e:
                         exc.append(element)
                 # if the slide that the current slide is based on is also based on another
                 # repeat the algorithm
@@ -628,13 +628,13 @@ def filter_layers_by_parameters(filter, action, layers, tree):
     if action == 'add':
         for x in layers_fil:
             if x not in layers:
-                disp("*Layer %s added" % x, args, 2)
+                #disp("*Layer %s added" % x, args, 2)
                 layers.append(x)
 
     if action == 'exclude':
         for x in layers_fil:
             if x in layers:
-                disp("*Layer %s excluded" % x, args, 2)
+                #disp("*Layer %s excluded" % x, args, 2)
                 layers.remove(x)
 
     return
