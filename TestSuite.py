@@ -300,6 +300,25 @@ class TestSuite(unittest.TestCase):
         layers = inklayers.get_layers_from_slide(slide, slides, tree)
         self.assertEqual(layers, [])
 
+    def test_unique_slide_names(self):
+        slides = [
+            {"name": "day sky", "include": ["L0", "L1"]},
+            {"name": "sun", "include": ["#0-#2"]},
+            {"name": "red fish", "include": ["#0-#3"]},
+            {"name": "both fishes", "include": ["#0-#4"]},
+            {"name": "day chat", "include": ["#0-#5"]}]
+        ret = inklayers.check_unique_slide_names(slides)
+        self.assertEqual(ret, None)
+
+    def test_unique_slide_names_failed(self):
+        slides = [
+            {"name": "day sky", "include": ["L0", "L1"]},
+            {"name": "sun", "include": ["#0-#2"]},
+            {"name": "sun", "include": ["#0-#3"]},
+            {"name": "both fishes", "include": ["#0-#4"]},
+            {"name": "day chat", "include": ["#0-#5"]}]
+        self.assertRaises(Exception, inklayers.check_unique_slide_names, slides)
+
     # Tests the based-on option
     def test_based_on_none(self):
         slide = {"include": ["L0"]}
@@ -308,7 +327,8 @@ class TestSuite(unittest.TestCase):
             slides = inklayers.load_info_from_config(conf, 'output', 'slides')
         inc = []
         exc = []
-        s = inklayers.check_based_on(slide, slides, inc, exc)
+        counter = slides.__len__()
+        s = inklayers.check_based_on(slide, slides, inc, exc, counter)
         self.assertEqual(s, slide)
 
     def test_based_on_one(self):
@@ -318,8 +338,31 @@ class TestSuite(unittest.TestCase):
             slides = inklayers.load_info_from_config(conf, 'output', 'slides')
         inc = []
         exc = []
-        s = inklayers.check_based_on(slide, slides, inc, exc)
+        counter = slides.__len__()
+        s = inklayers.check_based_on(slide, slides, inc, exc, counter)
         self.assertEqual(s, {"name": "night sky", "include": ["#0-#6"], "exclude": ["L5 msg:greetings"]})
+
+    def test_based_on_one_error_self(self):
+        slide = {"name": "moon", "based-on": "moon", "include": ["#7"]}
+        slides = [
+			{"name": "day chat", "include": ["#0-#5"]},
+			{"name": "night sky", "include": ["#0-#6"], "exclude": ["L5 msg:greetings"]},
+			{"name": "moon", "based-on": "moon", "include": ["#7"]}]
+        inc = []
+        exc = []
+        counter = slides.__len__()
+        self.assertRaises(Exception, inklayers.check_based_on, slide, slides, inc, exc, counter)
+
+    def test_based_on_one_error_loop(self):
+        slide = {"name": "moon", "based-on": "night sky", "include": ["#7"]}
+        slides = [
+			{"name": "day chat", "include": ["#0-#5"]},
+			{"name": "night sky", "based-on": "moon", "include": ["#0-#6"], "exclude": ["L5 msg:greetings"]},
+			{"name": "moon", "based-on": "night sky", "include": ["#7"]}]
+        inc = []
+        exc = []
+        counter = slides.__len__()
+        self.assertRaises(Exception, inklayers.check_based_on, slide, slides, inc, exc, counter)
 
     def test_based_on_multiple(self):
         slide = {"name": "1star", "based-on": "moon", "include": ["#8"]}
@@ -328,7 +371,8 @@ class TestSuite(unittest.TestCase):
             slides = inklayers.load_info_from_config(conf, 'output', 'slides')
         inc = []
         exc = []
-        s = inklayers.check_based_on(slide, slides, inc, exc)
+        counter = slides.__len__()
+        s = inklayers.check_based_on(slide, slides, inc, exc, counter)
         self.assertEqual(s, {'include': ['#0-#6'], 'exclude': ['L5 msg:greetings'], 'name': 'night sky'})
 
     def test_get_layers_from_slide_with_based_on(self):
@@ -340,6 +384,29 @@ class TestSuite(unittest.TestCase):
             slides = inklayers.load_info_from_config(conf, 'output', 'slides')
         layers = inklayers.get_layers_from_slide(slide, slides, tree)
         self.assertEqual(layers, ['L0', 'L1', 'L2', 'L3', 'L4', 'L6', 'L7', 'L8'])
+
+    # checks the filtering of the current slide due to command line parameters
+    def test_filter_layers_by_command_line_parameters_include(self):
+        layers = ['L3', 'Layer_a', 'LB', 'LC', 'LZ'] # the layers of the current slide
+        action = 'add'
+        layers_fil = ['L5'] # this is obtained by get_filtered_layer_labels() already tested above
+        if action == 'add':
+            for x in layers_fil:
+                if x not in layers:
+                    layers.append(x)
+        self.assertEqual(layers, ['L3', 'Layer_a', 'LB', 'LC', 'LZ', 'L5'])
+
+    def test_filter_layers_by_command_line_parameters_exclude(self):
+        layers = ['L3', 'Layer_a', 'LB', 'LC', 'LZ']
+        action = 'exclude'
+        layers_fil = ['LB', 'L9']
+        if action == 'exclude':
+            for x in layers_fil:
+                if x in layers:
+                    layers.remove(x)
+        self.assertEqual(layers, ['L3', 'Layer_a', 'LC', 'LZ'])
+
+
 
 
 

@@ -453,6 +453,13 @@ def get_slide_specific_setting(slide, key, arg):
         setting = arg
     return setting
 
+def check_unique_slide_names(slides):
+    for i, s1 in enumerate(slides):
+        for j, s2 in enumerate(slides):
+            if i != j:
+                if s1.get('name') == s2.get('name'):
+                    raise Exception("Error in config file: two slides with the same name found.")
+
 
 def process_config_file(conf, args):
     """Manages the generation of svg files and conversions according
@@ -477,6 +484,9 @@ def process_config_file(conf, args):
 
         # get slides from config file
         slides = load_info_from_config(conf, 'output', 'slides')
+
+        # check if names are unique (to avoid bugs with the based-on option)
+        check_unique_slide_names(slides)
 
         # process each slide in the config slide
         for index, slide in enumerate(slides):
@@ -550,7 +560,8 @@ def get_layers_from_slide(slide, slides, tree):
     # (it's based on another slide)
     inc = []
     exc = []
-    slide = check_based_on(slide, slides, inc, exc)
+    counter = slides.__len__()
+    slide = check_based_on(slide, slides, inc, exc, counter)
 
     # get all the labels and filter them using the current slide
     labels = get_layer_labels(get_layer_objects(tree))
@@ -569,7 +580,7 @@ def get_layers_from_slide(slide, slides, tree):
     return layers
 
 
-def check_based_on(slide, slides, inc, exc):
+def check_based_on(slide, slides, inc, exc, counter):
     """
     Checks if the slide is based on another one.
     If that's the case it saves the layers to include/exclude
@@ -581,30 +592,41 @@ def check_based_on(slide, slides, inc, exc):
         slides: all the slides in the config file
         inc: the layers to include from the slide that points to the current slide
         exc: the layers to exclude from the slide that points to the current slide
+        counter: used to safely exit the function in case a config file error causes a loop
     Returns:
         slide: the current slide (possibly modified if based-on others)
     """
     if 'based-on' in slide:
         #print(slide.get('based-on'))
-        for s in slides:
-            # if this is the slide it's based-on
-            if s.get('name') == slide.get('based-on'):
-                slideb = s
-                # if the current slide includes or excludes save these layers
-                if 'include' in slide:
-                    i = slide.get('include')
-                    for element in i:
-                        inc.append(element)
-                if 'exclude' in slide:
-                    e = slide.get('exclude')
-                    for element in e:
-                        exc.append(element)
-                # if the slide that the current slide is based on is also based on another
-                # repeat the algorithm
-                if 'based-on' in s:
-                    return check_based_on(slideb, slides, inc, exc)
-                slide = slideb
-                break
+        if slide.get('name') != slide.get('based-on'):
+            for s in slides:
+                # if this is the slide it's based-on
+                if s.get('name') == slide.get('based-on'):
+                    slideb = s
+                    # if the current slide includes or excludes save these layers
+                    if 'include' in slide:
+                        i = slide.get('include')
+                        for element in i:
+                            inc.append(element)
+                    if 'exclude' in slide:
+                        e = slide.get('exclude')
+                        for element in e:
+                            exc.append(element)
+                    # if the slide that the current slide is based on is also based on another
+                    # repeat the algorithm
+                    if 'based-on' in s:
+                        # This code is here to fix a possible bug. If there is an error in the config file and two slides
+                        # are based-on each other this makes sure that eventually the method will stop. The number of
+                        # iterations can't be greater than the total number of slides - 1 (if there is only a slide left
+                        # in the chain of based-on slides and it's also based-on another there must be an error in the file)
+                        counter -= 1
+                        if counter == 1:
+                            raise Exception("**Config file error: circular or infinite based-on detected.")
+                        return check_based_on(slideb, slides, inc, exc, counter)
+                    slide = slideb
+                    break
+        else:
+            raise Exception("**Config file error: a slide can't be based on itself.")
     return slide
 
 
