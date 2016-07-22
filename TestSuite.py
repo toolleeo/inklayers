@@ -319,6 +319,26 @@ class TestSuite(unittest.TestCase):
             {"name": "day chat", "include": ["#0-#5"]}]
         self.assertRaises(Exception, inklayers.check_unique_slide_names, slides)
 
+    def test_unique_slide_names_no_names(self):
+        slides = [
+            {"include": ["L0", "L1"]},
+            {"include": ["#0-#2"]},
+            {"include": ["#0-#3"]},
+            {"include": ["#0-#4"]},
+            {"include": ["#0-#5"]}]
+        ret = inklayers.check_unique_slide_names(slides)
+        self.assertEqual(ret, None)
+
+    def test_unique_slide_names_no_names_and_names(self):
+        slides = [
+            {"name": "slide1", "include": ["L0", "L1"]},
+            {"include": ["#0-#2"]},
+            {"include": ["#0-#3"]},
+            {"include": ["#0-#4"]},
+            {"include": ["#0-#5"]}]
+        ret = inklayers.check_unique_slide_names(slides)
+        self.assertEqual(ret, None)
+
     # Tests the based-on option
     def test_based_on_none(self):
         slide = {"include": ["L0"]}
@@ -406,9 +426,32 @@ class TestSuite(unittest.TestCase):
                     layers.remove(x)
         self.assertEqual(layers, ['L3', 'Layer_a', 'LC', 'LZ'])
 
+    def test_split_mode(self):
+        layers = ['L1', 'L2', 'L3']
+        base_name = 'fishes-0'
+        extension = 'svg'
+        result_names = []
+        result_layers = []
+        for index, l in enumerate(layers):
+            split_label = "-split-" + str(index)
+            slide_filename = base_name + split_label + "." + extension
+            layer = []
+            layer.append(l)
+            result_names.append(slide_filename)
+            result_layers.append(layer)
+        self.assertEqual(result_names, ['fishes-0-split-0.svg', 'fishes-0-split-1.svg', 'fishes-0-split-2.svg'])
+        self.assertEqual(result_layers, [['L1'], ['L2'], ['L3']])
 
-
-
+    def test_stacked_mode(self):
+        with open("opamp.svg") as f:
+            tree = etree.parse(f)
+        slides = inklayers.get_stacked_slides(tree)
+        self.assertEqual(slides, [{'include': ['L1']},
+                                  {'include': ['L1', 'L2']},
+                                  {'include': ['L1', 'L2', 'L3']},
+                                  {'include': ['L1', 'L2', 'L3', 'L4']},
+                                  {'include': ['L1', 'L2', 'L3', 'L4', 'L5']},
+                                  {'include': ['L1', 'L2', 'L3', 'L4', 'L5', 'L6']}])
 
 if __name__ == '__main__':
     unittest.main()
