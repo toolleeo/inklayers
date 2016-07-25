@@ -124,8 +124,8 @@ p_add('-v', '--verbosity', action='count', default=0,
 p_add('-l', '--latex', action='store_true', default=False,
       help='Print code for inclusion into LaTeX documents.')
 group = parser.add_mutually_exclusive_group()
-group.add_argument('-s', '--stack', action='store_true',
-      help='Export all layers in stacked mode (default). Use -e to exclude some layers.')
+group.add_argument('-s', '--stack', action='store_true', default=False,
+      help='Export all layers in stacked mode. Use -e to exclude some layers.')
 group.add_argument('-S', '--split', action='store_true', default=False,
       help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
 
@@ -457,8 +457,35 @@ def check_unique_slide_names(slides):
     for i, s1 in enumerate(slides):
         for j, s2 in enumerate(slides):
             if i != j:
-                if s1.get('name') == s2.get('name'):
-                    raise Exception("Error in config file: two slides with the same name found.")
+                name1 = s1.get('name')
+                name2 = s2.get('name')
+                if (name1 == name2) and ((name1 != None) or (name2 != None)):
+                    if name1 == name2:
+                        raise Exception("Error in config file: two slides with the same name found.")
+
+
+def get_stacked_slides(tree):
+    """
+    Reads the svg file structure to obtain the image layers and builds the slides using the layers in stacked mode
+    Example: [{"include" : "L1"}, {"include" : ["L1", "L2"]}, {"include" : ["L1", "L2", "L3"]}]
+    Args:
+        tree: The XML tree structure of the SVG file
+    Returns:
+        The list of slides
+    """
+    labels = get_layer_labels(get_layer_objects(tree))
+    num_slides = labels.__len__()
+    slides = []
+    for i in range(num_slides):
+        labs = []
+        for j, lab in enumerate(labels):
+            if j <= i:
+                labs.append(lab)
+            else:
+                break
+        slide = {"include": labs}
+        slides.append(slide)
+    return slides
 
 
 def process_config_file(conf, args):
@@ -482,11 +509,14 @@ def process_config_file(conf, args):
         dest_type = get_overridable_setting(args.type, conf, 'output', 'type')
         disp("Destination type: %s" % dest_type, args, 2)
 
-        # get slides from config file
-        slides = load_info_from_config(conf, 'output', 'slides')
-
-        # check if names are unique (to avoid bugs with the based-on option)
-        check_unique_slide_names(slides)
+        # get slides to export
+        if args.stack == False:
+            # get them from config file
+            slides = load_info_from_config(conf, 'output', 'slides')
+            # check if names are unique (to avoid bugs with the based-on option)
+            check_unique_slide_names(slides)
+        else:
+            slides = get_stacked_slides(tree)
 
         # process each slide in the config slide
         for index, slide in enumerate(slides):
