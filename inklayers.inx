@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+    <name>Inklayers</name>
+    <id>inklayers</id>
+    
+	<dependency type="extension">org.inkscape.output.svg.inkscape</dependency>
+	
+	<dependency type="executable" location="extensions">inklayersExt.py</dependency>
+		
+<_param name="introduction" type="description">Select a config file that specifies the layer combination to export for the currently opened svg file.</_param>
+<param name="tab" type="notebook">
+  <page name="main" _gui-text="Export options ">
+    <param name="configFile" type="string" 
+	_gui-text="Config file:"
+     _gui-description="(JSON format supported.)">.</param>
+
+    <param name="typeExp" type="enum" 
+    _gui-text="Type of file exported:"
+    _gui-description="The type of output file (will override the config file setting).">
+	<item value="None">(Use config file setting)</item>
+	<item value="pdf">.pdf</item>
+     <item value="png">.png</item>
+    </param>
+
+    <param name="namefmtExp" type="enum" 
+    _gui-text="Filename format:"
+    _gui-description="The output file format (will override the config file setting).">
+	<item value="None">(Use config file setting)</item>
+	<item value="%b-%n.%e">name-number.ext</item>
+     <item value="%b_%n.%e">name_number.ext</item>
+     <item value="%n-%b.%e">number-name.ext</item>
+    </param>
+
+    <param name="addLayers" type="string" 
+	_gui-text="Layers to add:"
+     _gui-description="Layers can be referenced by label or index (#0, #1, ...). Intervals are supported (#1-#9)"></param>
+
+    <param name="excludeLayers" type="string" 
+	_gui-text="Layers to exclude:"
+     _gui-description="Layers can be referenced by label or index (#0, #1, ...). Intervals are supported (#1-#9)"></param>
+	
+
+
+    <_param name="desc" type="description"></_param> 		
+  </page>
+</param>
+
+	
+    <effect needs-live-preview="false">
+                <object-type>all</object-type>
+                <effects-menu>
+                      <submenu _name="Export"/>
+                </effects-menu>
+    </effect>
+    
+    <script>
+        <command reldir="extensions" interpreter="python">inklayersExt.py</command>
+    </script>
+    
+</inkscape-extension>

@@ -21,794 +21,790 @@ TODO: redefine the license.
  * This software is release under the terms of .................
  *
 """
-import argparse
-import sys
 import subprocess
-import json
-import logging
-import pytoml as toml
-import glob
-
-from copy import deepcopy
+import sys
+import os
 from lxml import etree
 
+# The subfolder used to save/export files. It's relative to the input file.
+output_subfolder = '/output/'
 
-# constants (feel free to change these to your favorite defaults)
-if (sys.platform == 'win32'):
-    inkscape_prog = 'C:\Progra~1\Inkscape\inkscape.com'
-else:
-    inkscape_prog = 'inkscape'
+def get_commandLine():
+    import argparse
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     description='''Exports combinations of layers from an SVG file to various formats (PDF, PNG, etc.).''',
+                                     usage="%(prog)s [-h] infiles+ [options]",
+                                     epilog='''
 
-xpath_namespaces = {'svg': "http://www.w3.org/2000/svg",
-                    'sodipodi': "http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd",
-                    'inkscape': "http://www.inkscape.org/namespaces/inkscape",
-                    'xlink': "http://www.w3.org/1999/xlink",
-                    're': "http://exslt.org/regular-expressions"}
+    Requirements
+        This program requires Inkscape 0.48+ and Python 3.0+
+        Tested with Inkscape version 0.91.
 
-# parse options
-parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
-            description='''Exports combinations of layers from an SVG file to various formats (PDF, PNG, etc.).''',
-            usage="%(prog)s [-h] infiles+ [options]",
-            epilog='''
+    Behaviour:
+        The program exports any combination of SVG layers to files.
+        By default the exported file is in SVG format.
+        If Inkscape is found in the system, an automatic conversion to
+        Inkscape supported formats (png, pdf, ps, eps) can be done.
 
-Requirements
-    This program requires Inkscape 0.48+ and Python 3.0+
-    Tested with Inkscape version 0.91.
+        Multiple config file formats are currently supported: JSON and TOML.
 
-Behaviour:
-    The program exports any combination of SVG layers to files.
-    By default the exported file is in SVG format.
-    If Inkscape is found in the system, an automatic conversion to
-    Inkscape supported formats (png, pdf, ps, eps) can be done.
+        Layers can be referenced by label or index (#0, #1, ...).
+        The first layer has index 0.
+        Layer's interval is supported. Example format: #1-#9.
 
-    Multiple config file formats are currently supported: JSON and TOML.
+        Layers can be selected for inclusion or exclusion.
+        If include/exclude options collide, the latest prevails.
 
-    Layers can be referenced by label or index (#0, #1, ...).
-    The first layer has index 0.
-    Layer's interval is supported. Example format: #1-#9.
+        Wildcards for input files are supported.
 
-    Layers can be selected for inclusion or exclusion.
-    If include/exclude options collide, the latest prevails.
-
-    Wildcards for input files are supported.
-
-Examples:
-    %(prog)s *.svg -q
-    lists the avaiable layers for all the SVG files found in the folder.
-
-    %(prog)s file.json -eL0 -e#2-#4
-    exports the slides included in the config file by processing the svg file specified
-    and excludes the layers labelled "L0", #2, #3, #4
-
-    %(prog)s file.json -o(format)
-    exports the slides included in the config file by processing the svg file specified
-    and sets the output filename format (number-basename.extension for example)
-    (overrides the config file setting)
-
-    %(prog)s file.json -tpng
-    exports the slides included in the config file by processing the svg file specified
-    and sets the output file type
-    (overrides the config file setting)
-
-    %(prog)s file.svg file-?.svg file2.json -q -v
-    lists the avaiable layers on: file.svg and any file starting with file-?.svg
-    and also all exports the slides from the file specified in file2.json
-    (level-1 verbosity)
-
-    %(prog)s file.json -X-S
-    returns a comma separated list of id, x, y, w, and h for all objects
-
-''')
-
-p_add = parser.add_argument
-p_add('infiles', nargs='+',
-      help='SVG, JSON or TOML file, wildcards supported')
-p_add('-a', '--add', action='append', default=None,
-      help='Add layers to export. Use labels or indexes.')
-p_add('-e', '--exclude', action='append', default=None,
-      help='Use label or index to determine which objects to exclude from export')
-p_add('-o', '--outfile', action='store', default=None, choices=['%b-%n.%e', '%b_%n.%e', '%n-%b.%e'],
-      help='Output file format. See documentation for possible formats.')
-p_add('-i', '--inkscape', action='store', default=inkscape_prog,   # metavar='path_to_inkscape',
-      help='Path to inkscape command line executable')
-p_add('-t', '--type', action='store', default=None, choices=['png', 'ps', 'eps', 'pdf'],
-      help='Export type (and suffix). pdf by default. See Inkscape --help for supported formats.')
-p_add('-X', '--extra', action='store', metavar='Inkscape_Export_Options', default=' ',
-      help='Extra options passed through (literally) to inkscape for export. See Inkscape --help for more.')
-p_add('-D', '--debug', action='store_true', default=False,
-      help='Generates (very) verbose output.')
-p_add('-q', '--query', action='store_true', default=False,
-      help='List the available layers.')
-p_add('-v', '--verbosity', action='count', default=0,
-      help='Verbosity level.')
-p_add('-l', '--latex', action='store_true', default=False,
-      help='Print code for inclusion into LaTeX documents.')
-group = parser.add_mutually_exclusive_group()
-group.add_argument('-s', '--stack', action='store_true', default=False,
-      help='Export all layers in stacked mode. Use -e to exclude some layers.')
-group.add_argument('-S', '--split', action='store_true', default=False,
-      help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
-
-
-def disp(msg, args, level):
-    """ Print function that handles verbosity level.
-    """
-    try:
-        if args.verbosity >= level:
-            print(msg)
-    except:
-        pass
-
-
-def get_layer_id(infile, layer_name):
-    # TODO: the parsing of the file should be done only once, returning all the layers
-    # message("exporting from " + infile + " all objects " + ife(args.exclude, 'not ', '') + "matching " + args.xpath)
-    parser = etree.XMLParser()   # ns_clean=True)
-    intree = etree.parse(infile, parser)
-    if (len(parser.error_log) > 0):
-        logging.error("Could not parse ", infile, ":")
-        logging.debug(parser.error_log)
-
-    # find the ids
-    find_str_ids = "(" + "//svg:g[@inkscape:groupmode='layer']" + ")/@id"
-    find_ids = etree.XPath(find_str_ids, namespaces=xpath_namespaces)
-    ids = find_ids(intree)
-    print(ids)
-
-    # find the labels
-    find_str_labels = "(" + "//svg:g[@inkscape:groupmode='layer']" + ")/@inkscape:label"
-    find_labels = etree.XPath(find_str_labels, namespaces=xpath_namespaces)
-    labels = find_labels(intree)
-
-    index = labels.index(layer_name)
-    return ids[index]
-
-
-def get_id(infile, obj):
-    print("obj: %s" % obj)
-    if 'layer' in obj:
-        obj_id = get_layer_id(infile, obj['layer'])
-    print("Returning: %s" % obj_id)
-    return obj_id
-
-
-def get_ids(infile, objs):
-    ids = [get_id(infile, o) for o in objs]
-    return ids
-
-
-def is_layer(e):
-    if e.get('{http://www.inkscape.org/namespaces/inkscape}groupmode') == 'layer':
-        return True
-    else:
-        return False
-
-
-def get_label(e):
-    label = e.get('{http://www.inkscape.org/namespaces/inkscape}label')
-    return label
-
-
-def match_label(e, objects):
-    label = get_label(e)
-    # print('   Checking label %s in %s' % (label, objects))
-    if label in objects:
-        return True
-    return False
-
-
-def print_layers(tree):
-    """Prints the layers in the given tree
-    """
-    root = tree.getroot()
-    for x in root:
-        if is_layer(x):
-            print('%s' % (x.get('{http://www.inkscape.org/namespaces/inkscape}label')))
-            # print('%s %s' % (x.tag, x.keys()))
-            # print('%s %s' % (x.tag, x.get('id')))
-
-
-def save_svg(tree, objects, outfile, args={}):
-    """
-    Saves the svg file given the structure of the input file
-    and the layers to include
-    """
-    disp('*** Saving to %s' % outfile, args, 1)
-    mytree = deepcopy(tree)
-    root = mytree.getroot()
-    for x in root:
-        if is_layer(x) and not match_label(x, objects):
-            root.remove(x)
-    try:
-        if args.verbosity >= 1:
-            print_layers(mytree)
-    except:
-        pass
-    with open(outfile, 'w') as f:
-        f.write(etree.tostring(mytree, encoding="unicode", pretty_print=True))
-
-
-def inkscape_installed(args):
-    """ Verify inkscape path. """
-    try:
-        run([args.inkscape, "-V"])
-        return True
-    except Exception:
-        return False
-
-
-def split_filename(fname):
-    """
-    Split filename into basename (optional path included) and extension.
-    """
-    index = fname.rfind('.')
-    if index >= 0:
-        basename = fname[:index]
-        extension = fname[index + 1:]
-        return basename, extension
-    else:
-        return None, None
-
-
-def svg2file(base_name, desttype, args):
-    """
-    Convert base_name.svg into outfile named base_file.ext,
-    where ext depends on desttype.
-    Args contains the inkscape pathname and arguments.
-    """
-    if not inkscape_installed(args):
-        print('Inkscape command line executable not found.')
-        print('Set --inkscape option accordingly.')
-        return
-
-    svg_file = base_name + '.svg'
-    outfile = base_name + '.' + desttype
-    command = args.inkscape + ' --export-' + desttype + ' ' + outfile + ' ' + args.extra + ' ' + svg_file
-    disp("Running '%s'" % command, args, 2)
-    run(command, shell=True)
-
-
-def parse_interval_string(s):
-    """
-    Parse the layer indexing string.
-    Intervals can be defined by one number or two numbers separated by dash.
-    Each number is prefixed by '#'.
-    Different intervals can be separated by comma.
-    Returns a list of tuples. Each tuple is the closed interval of layer indexes.
     Examples:
+        %(prog)s *.svg -q
+        lists the avaiable layers for all the SVG files found in the folder.
 
-      "#0-#10" -> [(0, 10)]
-      "#0,#10" -> [(0, 0), (10, 10)]
-      "#0,#10-#15,#30" -> [(0, 0), (10, 15), (30, 30)]
+        %(prog)s file.json -eL0 -e#2-#4
+        exports the slides included in the config file by processing the svg file specified
+        and excludes the layers labelled "L0", #2, #3, #4
+
+        %(prog)s file.json -o(format)
+        exports the slides included in the config file by processing the svg file specified
+        and sets the output filename format (number-basename.extension for example)
+        (overrides the config file setting)
+
+        %(prog)s file.json -tpng
+        exports the slides included in the config file by processing the svg file specified
+        and sets the output file type
+        (overrides the config file setting)
+
+        %(prog)s file.svg file-?.svg file2.json -q -v
+        lists the avaiable layers on: file.svg and any file starting with file-?.svg
+        and also all exports the slides from the file specified in file2.json
+        (level-1 verbosity)
+
+        %(prog)s file.json -X-S
+        returns a comma separated list of id, x, y, w, and h for all objects
+
+    ''')
+
+    p_add = parser.add_argument
+    p_add('infiles', nargs='+',
+          help='SVG, JSON or TOML file, wildcards supported')
+    p_add('-a', '--add', action='append', default=None,
+          help='Add layers to export. Use labels or indexes.')
+    p_add('-e', '--exclude', action='append', default=None,
+          help='Use label or index to determine which objects to exclude from export')
+    p_add('-o', '--outfile', action='store', default=None, choices=['%b-%n.%e', '%b_%n.%e', '%n-%b.%e'],
+          help='Output file format. See documentation for possible formats.')
+    p_add('-i', '--inkscape', action='store', default='Default',
+          help='Path to inkscape command line executable')
+    p_add('-t', '--type', action='store', default=None, choices=['png', 'ps', 'eps', 'pdf'],
+          help='Export type (and suffix). pdf by default. See Inkscape --help for supported formats.')
+    p_add('-X', '--extra', action='store', metavar='Inkscape_Export_Options', default=' ',
+          help='Extra options passed through (literally) to inkscape for export. See Inkscape --help for more.')
+    p_add('-D', '--debug', action='store_true', default=False,
+          help='Generates (very) verbose output.')
+    p_add('-q', '--query', action='store_true', default=False,
+          help='List the available layers.')
+    p_add('-v', '--verbosity', action='count', default=0,
+          help='Verbosity level.')
+    p_add('-l', '--latex', action='store_true', default=False,
+          help='Print code for inclusion into LaTeX documents.')
+    p_add('-out', '--outfolder', action='store', default=None)
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-s', '--stack', action='store_true', default=False,
+                       help='Export all layers in stacked mode. Use -e to exclude some layers.')
+    group.add_argument('-S', '--split', action='store_true', default=False,
+                       help='Export all layers, split one layer per output file. Use -e to exclude some layers.')
+    c_line = parser.parse_args()
+    d = vars(c_line)
+    return d
+
+
+class StringParser:
     """
-    intervals = []
-    for i in s.split(','):
-        tokens = i.split('-')
-        tokens = [x.strip() for x in tokens]
-        for x in tokens:
-            if x[0] != '#':
+    Service class used to contain a few methods regarding string manipulation.
+    """
+    @staticmethod
+    def get_filters(filters, keyword):
+        """
+        If no layers are listed, returns an empty list.
+        """
+        # print('filters: %s keyword %s' % (str(filters), keyword))
+        filt = []
+        if keyword in filters:
+            for i, x in enumerate(filters[keyword]):
+                # print("i, x = %s" % x)
+                intervals = StringParser.parse_interval_string(x)
+                # print("intervals = %s" % intervals)
+                if intervals is not None:
+                    filt.extend(intervals)
+        # print('filt = %s' % filt)
+        return filt
+
+    @staticmethod
+    def parse_interval_string(s):
+        """
+        Parse the layer indexing string.
+        Intervals can be defined by one number or two numbers separated by dash.
+        Each number is prefixed by '#'.
+        Different intervals can be separated by comma.
+        Returns a list of tuples. Each tuple is the closed interval of layer indexes.
+        Examples:
+
+          "#0-#10" -> [(0, 10)]
+          "#0,#10" -> [(0, 0), (10, 10)]
+          "#0,#10-#15,#30" -> [(0, 0), (10, 15), (30, 30)]
+        """
+        intervals = []
+        for i in s.split(','):
+            tokens = i.split('-')
+            tokens = [x.strip() for x in tokens]
+            for x in tokens:
+                if x[0] != '#':
+                    return None
+            try:
+                intvals = [int(x[1:]) for x in tokens]
+            except Exception:
                 return None
-        try:
-            intvals = [int(x[1:]) for x in tokens]
-        except Exception:
-            return None
-        if len(intvals) == 1:
-            intervals.append((intvals[0], intvals[0]))
-        elif len(intvals) == 2:
-            intervals.append((intvals[0], intvals[1]))
+            if len(intvals) == 1:
+                intervals.append((intvals[0], intvals[0]))
+            elif len(intvals) == 2:
+                intervals.append((intvals[0], intvals[1]))
+            else:
+                return None
+        return intervals
+
+    @staticmethod
+    def is_number_in_intervals(n, intervals):
+        """
+        Check whether the numerical value n is included in any interval
+        in the intervals list.
+        The intervals list has the form [(x1, x2), (y1, y2), ...]
+        """
+        if any(lower <= n <= upper for (lower, upper) in intervals):
+            return True
         else:
+            return False
+
+    @staticmethod
+    def get_filename(fmt, basename=None, extension=None, index=None):
+        """
+        Returns a file name given a file format (ex. %b-%n.%e)
+        """
+        if fmt.find('%b') > 0 and basename is None:
             return None
-    return intervals
+        if basename is not None:
+            fmt = fmt.replace('%b', basename)
+        if fmt.find('%e') > 0 and extension is None:
+            return None
+        if extension is not None:
+            fmt = fmt.replace('%e', extension)
+        if fmt.find('%n') > 0 and index is None:
+            return None
+        if index is not None:
+            fmt = fmt.replace('%n', str(index))
+        return fmt
+
+    @staticmethod
+    def get_filtered_layer_labels(labels, filters):
+        """
+        Returns the list of layer's labels by filtering the list
+        *labels* by including and excluding the elements specified
+        in the *filters* dict.
+        The intermediate filters corresponds to numerical intervals.
+        """
+        # add filters specified by intervals
+        include = StringParser.get_filters(filters, 'include')
+        exclude = StringParser.get_filters(filters, 'exclude')
+        # add intervals corresponding to labels
+        def get_filters_by_label(labels, filters, keyword):
+            filt = []
+            if keyword in filters:
+                for x in filters[keyword]:
+                    if x in labels:
+                        index = labels.index(x)
+                        filt.append((index, index))
+            return filt
+        include.extend(get_filters_by_label(labels, filters, 'include'))
+        exclude.extend(get_filters_by_label(labels, filters, 'exclude'))
+        # filters labels
+        for i, label in enumerate(labels):
+            # exclude those elements that are not included
+            if not StringParser.is_number_in_intervals(i, include):
+                labels[i] = None
+            # exclude those elements that are explicitly excluded
+            if StringParser.is_number_in_intervals(i, exclude):
+                labels[i] = None
+        # remove None values
+        l = [x for x in labels if x is not None]
+        return l
 
 
-def get_filename(fmt, basename=None, extension=None, index=None):
+class FileHandler:
     """
-    Returns a file name given a file format (ex. %b-%n.%e)
+    It handles the loading of slide configuration from input files and the creation of
+    svg file instances along with a few filename operations.
     """
-    if fmt.find('%b') > 0 and basename is None:
-        return None
-    if basename is not None:
-        fmt = fmt.replace('%b', basename)
-    if fmt.find('%e') > 0 and extension is None:
-        return None
-    if extension is not None:
-        fmt = fmt.replace('%e', extension)
-    if fmt.find('%n') > 0 and index is None:
-        return None
-    if index is not None:
-        fmt = fmt.replace('%n', str(index))
-    return fmt
+    output_folder = ''
+
+    def get_path_and_fullname(self, file):
+        """
+        Returns the path and the fullname (path + filename) of a file
+        """
+        path = os.path.dirname(file)
+        if path == '':
+            path = os.getcwd()
+            file = path + '/' + file
+        return path, file
+
+    def get_basename(self, filename):
+        bn, ext = os.path.splitext(filename)
+        return bn
+
+    def get_extension(self, filename):
+        bn, ext = os.path.splitext(filename)
+        return ext
+
+    def get_etree(self, filename):
+        with open(filename) as f:
+            return etree.parse(f)
+
+    def load_input_file(self, filename):
+        """
+        Returns an svg file object instance and a dictionary containing the slide configuration.
+        """
+        # disp("Loading " + ext.upper() + " file...", args, 2)
+        svg_name = ''
+        conf = None
+        ext = self.get_extension(filename)
+        with open(filename) as infile:
+            if ext == '.svg':
+                # TODO:  check if the SVG file has slide configuration included
+                # conf = None
+                #raise ('Unable to load config from %s. Function not yet supported.' % filename)
+                svg_name = filename
+            if ext == '.json':
+                import json
+                conf = json.load(infile)
+                svg_name = conf['input']['filename']
+            if ext == '.toml':
+                try:
+                    import pytoml as toml
+                    conf = toml.load(infile)
+                    svg_name = conf['input']['filename']
+                except Exception as e:
+                    raise('Unable to load toml module or error in input file.\n' + str(e))
+            elif ext not in ['.svg', '.json', '.toml']:
+                raise Exception('File type not supported')
+
+        if os.path.dirname(svg_name) == '':
+            full_svg_name = os.path.dirname(filename) + '/' + svg_name
+        else:
+            full_svg_name = svg_name
+        svg_tree = self.get_etree(full_svg_name)
+        svg_base_name = self.get_basename(svg_name)
+        return SVGFile(svg_base_name, svg_tree), conf
 
 
-def get_filters(filters, keyword):
+class Layer():
     """
-    If no layers are listed, returns an empty list.
+    Represents the layer object contained in a svg file or in a slide.
     """
-    # print('filters: %s keyword %s' % (str(filters), keyword))
-    filt = []
-    if keyword in filters:
-        for i, x in enumerate(filters[keyword]):
-            # print("i, x = %s" % x)
-            intervals = parse_interval_string(x)
-            # print("intervals = %s" % intervals)
-            if intervals is not None:
-                filt.extend(intervals)
-    # print('filt = %s' % filt)
-    return filt
+    def __init__(self, obj):
+        self.id = obj.get('id')
+        self.label = Layer.get_label_from_obj(obj)
 
+    @staticmethod
+    def is_layer(e):
+        if e.get('{http://www.inkscape.org/namespaces/inkscape}groupmode') == 'layer':
+            return True
+        else:
+            return False
 
-def is_number_in_intervals(n, intervals):
-    """
-    Check whether the numerical value n is included in any interval
-    in the intervals list.
-    The intervals list has the form [(x1, x2), (y1, y2), ...]
-    """
-    if any(lower <= n <= upper for (lower, upper) in intervals):
-        return True
-    else:
+    @staticmethod
+    def get_label_from_obj(e):
+        label = e.get('{http://www.inkscape.org/namespaces/inkscape}label')
+        return label
+
+    def get_layer_labels(self, objects):
+        """
+        Returns the list of labels of each layer object passed as argument.
+        """
+        labels = [Layer.get_label_from_obj(x) for x in objects if Layer.is_layer(x)]
+        return labels
+
+    def get_label(self):
+        return self.label
+
+    @staticmethod
+    def match_label(e, objects):
+        label = Layer.get_label_from_obj(e)
+        # print('   Checking label %s in %s' % (label, objects))
+        if label in objects:
+            return True
         return False
 
 
-def get_filters_by_label(labels, filters, keyword):
-    filt = []
-    if keyword in filters:
-        for x in filters[keyword]:
-            if x in labels:
-                index = labels.index(x)
-                filt.append((index, index))
-    return filt
-
-
-def get_filtered_layer_labels(labels, filters):
+class Slide:
     """
-    Returns the list of layer's labels by filtering the list
-    *labels* by including and excluding the elements specified
-    in the *filters* dict.
-    The intermediate filters corresponds to numerical intervals.
+    Contains everything related to a slide: filename, id, name, type, layers, elementTree data
     """
-    # add filters specified by intervals
-    include = get_filters(filters, 'include')
-    exclude = get_filters(filters, 'exclude')
-    # add intervals corresponding to labels
-    include.extend(get_filters_by_label(labels, filters, 'include'))
-    exclude.extend(get_filters_by_label(labels, filters, 'exclude'))
-    # filters labels
-    for i, label in enumerate(labels):
-        # exclude those elements that are not included
-        if not is_number_in_intervals(i, include):
-            labels[i] = None
-        # exclude those elements that are explicitly excluded
-        if is_number_in_intervals(i, exclude):
-            labels[i] = None
-    # remove None values
-    l = [x for x in labels if x is not None]
-    return l
+    def __init__(self, id, filename, name, type, layers, root):
+        self.filename = filename
+        self.id = id
+        self.name = name
+        self.type = type # estensione
+        self.layers = layers
+        self.root = root
+
+    def get_layers(self):
+        """
+        Returns: a list containing all the layer objects of the slide
+        """
+        return self.layers
+
+    def get_labels(self):
+        """
+        Returns: a list containing all the layer labels of the slide
+        """
+        return [layer.get_label() for layer in self.layers]
+
+    def update_layers(self, layers, root):
+        """
+        Updates the layer objects included in the slide
+        """
+        self.layers = layers
+        self.root = root
 
 
-def etree_test(tree):
-    root = tree.getroot()
-    print(etree.tostring(root, encoding="unicode", pretty_print=True))
-    for x in root:
-        print('%s %s' % (x.tag, x.get('{http://www.inkscape.org/namespaces/inkscape}label')))
-        print('%s %s' % (x.tag, x.keys()))
-        print('%s %s' % (x.tag, x.get('id')))
 
-
-def load_info_from_config(conf, key1, key2):
-    """Loads the settings from the config file
-    using the keys provided
-    (Examples: the input svg file, the output file type,
-    the output file format and the slides)
-
-    Args:
-        conf: The config file to be processed
-        key1: The key to search for
-        key2: The subkey to search for
-
-    Returns:
-        The value associated with the keys
-        (or an exception message to be catched by the main program)
+class SlideConfiguration:
     """
-    try:
-        return conf[key1][key2]
-    except:
-        raise Exception("Config file format error: " + key1 + " -> " + key2 + " not found.")
-
-
-def get_overridable_setting(arg, config, key1, key2):
+    It aggregates all data regarding the slides to export.
+    Given a dictionary extracted from the config file and optional settings from the user
+    it creates a slide configuration to be used for exporting slides to files.
     """
-    Returns a setting found in the config file
-    If a command line parameter was specified, it overrides the config file setting
-    Args:
-        arg: The command line parameter value
-        config: The input config file
-        key1: The key to search for
-        key2: The subkey to search for
+    def __init__(self, svg_file, config, options):
+        self.options = options
+        self.svg_file = svg_file
+        self.fname_fmt = self.load_element(config, 'output', 'filename')
+        self.type = self.load_element(config, 'output', 'type')
+        self.slides = []
+        self.load_slides(self.load_element(config, 'output', 'slides'))
 
-    Returns: the setting found
+    def load_element(self, conf, key1, key2):
+        """Loads the settings found in the config file
+        using the keys provided.
+        """
+        try:
+            return conf[key1][key2]
+        except:
+            raise Exception("Config file format error: " + key1 + " -> " + key2 + " not found.")
 
-    """
-    if (arg is None):
-        setting = load_info_from_config(config, key1, key2)
-    else:
-        setting = arg
-    return setting
-
-
-def get_slide_specific_setting(slide, key, arg):
-    """
-    Used to get a slide specific setting (ex. slidename, filetype)
-    If not found, it uses the global setting
-    Args:
-        slide: The slide to process
-        key: The key to search for
-        arg: The global setting
-
-    Returns: The slide setting
-
-    """
-    if key in slide:
-        setting = slide[key]
-    else:
-        setting = arg
-    return setting
-
-def check_unique_slide_names(slides):
-    for i, s1 in enumerate(slides):
-        for j, s2 in enumerate(slides):
-            if i != j:
-                name1 = s1.get('name')
-                name2 = s2.get('name')
-                if (name1 == name2) and ((name1 != None) or (name2 != None)):
-                    if name1 == name2:
-                        raise Exception("Error in config file: two slides with the same name found.")
-
-
-def get_stacked_slides(tree):
-    """
-    Reads the svg file structure to obtain the image layers and builds the slides using the layers in stacked mode
-    Example: [{"include" : "L1"}, {"include" : ["L1", "L2"]}, {"include" : ["L1", "L2", "L3"]}]
-    Args:
-        tree: The XML tree structure of the SVG file
-    Returns:
-        The list of slides
-    """
-    labels = get_layer_labels(get_layer_objects(tree))
-    num_slides = labels.__len__()
-    slides = []
-    for i in range(num_slides):
-        labs = []
-        for j, lab in enumerate(labels):
-            if j <= i:
-                labs.append(lab)
-            else:
-                break
-        slide = {"include": labs}
-        slides.append(slide)
-    return slides
-
-
-def process_config_file(conf, args):
-    """Manages the generation of svg files and conversions according
-    to the desired options.
-    Returns the list of generated files.
-    """
-    infile = load_info_from_config(conf, 'input', 'filename')
-    filenames = []
-    with open(infile) as f:
-        tree = etree.parse(f)
-        # etree_test(tree)
-
-        # If a file output format is not specified in the command line, the format in the config file is used.
-        # If it's specified, the command line option overrides the config file setting
-        outfile = get_overridable_setting(args.outfile, conf, 'output', 'filename')
-        disp("Output file format: %s" % outfile, args, 2)
-
-        # If a file type is not specified in the command line, the type from the config file is used.
-        # If it's specified, the command line option overrides the config file setting
-        dest_type = get_overridable_setting(args.type, conf, 'output', 'type')
-        disp("Destination type: %s" % dest_type, args, 2)
-
-        # get slides to export
-        if args.stack == False:
-            # get them from config file
-            slides = load_info_from_config(conf, 'output', 'slides')
-            # check if names are unique (to avoid bugs with the based-on option)
-            check_unique_slide_names(slides)
-        else:
-            slides = get_stacked_slides(tree)
-
-        # process each slide in the config slide
+    def load_slides(self, slides):
+        """
+        Loads the slides from the config file dictionary.
+        Uses a specific method for stacked mode if required and proceeds by adding an id
+        to each slide and by processing the slides.
+        """
+        self.check_unique_slide_names(slides)
+        if self.options.get('stack'):
+            slides = self.load_stacked_slides()
         for index, slide in enumerate(slides):
-            # if an output file format is not specified in the command line...
-            if args.outfile is None:
-                # ...a filename specification in a slide overrides the global one in the config file
-                slide_filename_fmt = get_slide_specific_setting(slide, 'filename', outfile)
-                disp("Output file format for this slide: %s" % slide_filename_fmt, args, 2)
-            else:
-                slide_filename_fmt = args.outfile
-            # if a type is not specified in the command line...
-            if args.type is None:
-                # ...a type specification in a slide overrides the global one in the config file
-                type_slide = get_slide_specific_setting(slide, 'type', dest_type)
-                disp("Destination type for this slide: %s" % type_slide, args, 2)
-            else:
-                type_slide = args.type
+            slide['id'] = index
+        self.process_slides(slides)
 
-            # slide filename
-            (bn, ext) = split_filename(infile)
-            slide_filename = get_filename(slide_filename_fmt, basename=bn, extension='svg', index=index)
-            filenames.append(slide_filename)
-            (base_name, extension) = split_filename(slide_filename)
+    def check_unique_slide_names(self, slides):
+        """
+        Verifies if a slide name is repeated more than once
+        (That would cause a problem with based-on slides
+        """
+        names = [slide.get('name') for slide in slides if slide.get('name') != None]
+        if names == []:
+            return
+        count = [names.count(name) for name in set(names)]
+        for x in count:
+            if x > 1:
+                raise Exception("Error in config file: two slides with the same name found.")
 
-            # process slide and get the layers
-            layers = get_layers_from_slide(slide, slides, tree)
+    def process_slides(self, slides):
+        """
+        Process and make the slides adding them to a list in the slide configuration object.
+        This method may be executed more than once depending on the number of 'based-on' slides.
+        """
+        old_count = len(slides)
+        def madeNames(): # Returns the names of the slides already created (required by the based-on slides)
+            return [slide.name for slide in self.slides if slide.name is not '']
 
-            # further filtering of layers if command line parameters are used
-            if args.add is not None:
-                filter_layers_by_parameters(args.add, 'add', layers, tree)
-            if args.exclude is not None:
-                filter_layers_by_parameters(args.exclude, 'exclude', layers, tree)
+        for slide in slides:
+            # If a slide is not based on another one or it is but the other was already created then make it now
+            # (otherwise wait the next execution of this method)
+            if 'based-on' not in slide or ('based-on' in slide and slide.get('based-on') in madeNames()):
+                createdSlide = self.make_slide(slide)
+                self.slides.append(createdSlide)
 
-            # If the split option is used, save each layer to different svg and output files
-            # format: name-split-index
-            if args.split == True:
-                for index, l in enumerate(layers):
-                    split_label = "-split-" + str(index)
-                    slide_filename = base_name + split_label + "." + extension
-                    layer = []
-                    layer.append(l)  # for compatibility with the match_label function we need a list
-                    save_svg(tree, layer, slide_filename, args=args)
-                    svg2file(base_name + split_label, type_slide, args)
-            else:
-                # Saves slides to single files (default)
-                # if layers is not an empty list (in case all layers are excluded)
-                if layers != []:
-                    save_svg(tree, layers, slide_filename, args=args)
-                    # TODO: add support for automatic file extension
-                    # convert the svg file into the desired format
-                    # if out['type'] == 'auto':
-                    #     filetype = get_file_type_from_filename(outfile)
-                    # else:
-                    svg2file(base_name, type_slide, args)
+        madeIDs = [slide.id for slide in self.slides] # the ids of the already created slides
+        slides = [slide for slide in slides if slide['id'] not in madeIDs] # the slides remaining to be created
+        new_count = len(slides)
 
-    return filenames
+        if new_count != 0 and new_count != old_count: # if there are slides remaining execute the method again
+            self.process_slides(slides)
+        # if there are slides left and no more slides were created in this iteration then there must be an error
+        if new_count == old_count:
+            raise Exception('Wrong based-on names or circular based-on detected')
+        # Filter the slides using global parameters (specified by command line or gui)
+        def filter_with_globals(param, action):
+            for slide in self.slides:
+                layers = slide.get_labels()
+                self.filter_layers(param, action, layers)
+                root = self.svg_file.get_filtered_obj(layers)
+                layer_objs = self.svg_file.get_filtered_layer_objs(layers)
+                slide.update_layers(layer_objs, root)
+        if self.options.get('add') is not None:
+            filter_with_globals(self.options.get('add'), 'add')
+        if self.options.get('exclude') is not None:
+            filter_with_globals(self.options.get('exclude'), 'exclude')
+        # todo: order by id
 
+    def make_slide(self, slide):
+        """
+        Creates the slide
+        """
+        # Check if the slide has specific settings (a different name format or type/extension)
+        fname_fmt = self.get_slide_specific_setting(slide, self.options.get('outfile'), self.fname_fmt, 'filename')
+        type = self.get_slide_specific_setting(slide, self.options.get('type'), self.type, 'type')
+        # Set the slide name and filename
+        name = slide.get('name') if 'name' in slide else ''
+        bn = self.svg_file.basefilename
+        fname = StringParser.get_filename(fname_fmt, basename=bn, extension='svg', index=slide.get('id'))
 
-def get_layers_from_slide(slide, slides, tree):
-    """
-    Process the current slide to get the layers
-    to send to inkscape for exporting
-    Args:
-        slide: the current slide examined
-        slides: all the slides in the config file
-        tree: the tree structure
-    Returns:
-        layers: the layers of the current slide
-    """
-    # checks if the slide has the based-on option
-    # (it's based on another slide)
-    inc = []
-    exc = []
-    counter = slides.__len__()
-    slide = check_based_on(slide, slides, inc, exc, counter)
-
-    # get all the labels and filter them using the current slide
-    labels = get_layer_labels(get_layer_objects(tree))
-    logging.debug('labels %s' % str(labels))
-    logging.debug('slide %s' % str(slide))
-    layers = get_filtered_layer_labels(labels, slide)
-    logging.debug('layers %s' % str(layers))
-
-    # if a slide is based on another one add and/or exclude the proper layers
-    # as defined in the config file
-    if inc != []:
-        filter_layers_by_parameters(inc, 'add', layers, tree)
-    if exc != []:
-        filter_layers_by_parameters(exc, 'exclude', layers, tree)
-
-    return layers
-
-
-def check_based_on(slide, slides, inc, exc, counter):
-    """
-    Checks if the slide is based on another one.
-    If that's the case it saves the layers to include/exclude
-    and process the other slide.
-    If the other slide is also based on another one it keeps
-    processing recursively.
-    Args:
-        slide: the current slide under examination
-        slides: all the slides in the config file
-        inc: the layers to include from the slide that points to the current slide
-        exc: the layers to exclude from the slide that points to the current slide
-        counter: used to safely exit the function in case a config file error causes a loop
-    Returns:
-        slide: the current slide (possibly modified if based-on others)
-    """
-    if 'based-on' in slide:
-        #print(slide.get('based-on'))
-        if slide.get('name') != slide.get('based-on'):
-            for s in slides:
-                # if this is the slide it's based-on
-                if s.get('name') == slide.get('based-on'):
-                    slideb = s
-                    # if the current slide includes or excludes save these layers
+        labels = self.svg_file.get_labels()
+        layers = []
+        # Load the layers. If a slide is based-on another do the appropriate filtering.
+        if 'based-on' in slide:
+            for madeSlide in self.slides:
+                if slide.get('based-on') == madeSlide.name:
+                    for layer in madeSlide.layers:
+                        layers.append(layer.get_label())
                     if 'include' in slide:
-                        i = slide.get('include')
-                        for element in i:
-                            inc.append(element)
+                        slide_inc = [elem for elem in slide.get('include')]
+                        self.filter_layers(slide_inc, 'add', layers)
                     if 'exclude' in slide:
-                        e = slide.get('exclude')
-                        for element in e:
-                            exc.append(element)
-                    # if the slide that the current slide is based on is also based on another
-                    # repeat the algorithm
-                    if 'based-on' in s:
-                        # This code is here to fix a possible bug. If there is an error in the config file and two slides
-                        # are based-on each other this makes sure that eventually the method will stop. The number of
-                        # iterations can't be greater than the total number of slides - 1 (if there is only a slide left
-                        # in the chain of based-on slides and it's also based-on another there must be an error in the file)
-                        counter -= 1
-                        if counter == 1:
-                            raise Exception("**Config file error: circular or infinite based-on detected.")
-                        return check_based_on(slideb, slides, inc, exc, counter)
-                    slide = slideb
-                    break
+                        slide_exc = [elem for elem in slide.get('exclude')]
+                        self.filter_layers(slide_exc, 'exclude', layers)
         else:
-            raise Exception("**Config file error: a slide can't be based on itself.")
-    return slide
+            layers = StringParser.get_filtered_layer_labels(labels, slide)
+
+        root = self.svg_file.get_filtered_obj(layers)
+        layer_objs = self.svg_file.get_filtered_layer_objs(layers)
+        return Slide(slide.get('id'), fname, name, type, layer_objs, root)
 
 
-def filter_layers_by_parameters(filter, action, layers, tree):
+    def filter_layers(self, filter, action, layers):
+        """
+        Filter a list of layers using include and exclude.
+        Required for global parameters and based-on mechanism.
+        """
+        # get all the labels in the file
+        labels_fil = self.svg_file.get_labels()
+        # creates a slide with the layers to include or exclude
+        slide_fil = {'include': filter}
+        # get the layers as labels from slide_fil
+        layers_fil = StringParser.get_filtered_layer_labels(labels_fil, slide_fil)
+        if action == 'add':
+            for layer in layers_fil:
+                if layer not in layers:
+                    layers.append(layer)
+        if action == 'exclude':
+            for layer in layers_fil:
+                if layer in layers:
+                    layers.remove(layer)
+
+    def get_slide_specific_setting(self, slide, global_setting, config_setting, slide_setting):
+        """
+        Used to check if a slide has a specific setting (name format or type).
+        If a global setting was specified in command line or gui it always overrides other settings.
+        Otherwise the config file general setting is used, unless the slide has a specific setting.
+        """
+        if global_setting is not None:
+            return global_setting
+        else:
+            if slide_setting in slide:
+                return slide.get(slide_setting)
+            else:
+                return config_setting
+
+    def load_stacked_slides(self):
+        """
+        Reads the svg file structure to obtain the image layers and builds the slides using the layers in stacked mode
+        Example: [{"include" : "L1"}, {"include" : ["L1", "L2"]}, {"include" : ["L1", "L2", "L3"]}]
+        """
+        labels = self.svg_file.get_labels()
+        slide_number = len(labels)
+        slides = []
+        def get_stacked_labels(counter):
+            layers = []
+            for i, label in enumerate(labels):
+                if i <= counter:
+                    layers.append(label)
+                else:
+                    break
+            return layers
+        for i in range(slide_number):
+            slide = {"include": get_stacked_labels(i)}
+            slides.append(slide)
+        return slides
+
+
+class SVGFile():
     """
-    Modifies the layers of the current slide to add or exclude
-    the layers specified in the command line
-    Args:
-        filter: the layers to add or exclude
-        action: how to handle the layers ('add' or 'exclude')
-        layers: the layers of the current slide after previous filtering
-        tree: the tree structure of the config file
+    Represents the SVG file object used for slide configurations.
     """
-    # get all the labels in the file
-    labels_fil = get_layer_labels(get_layer_objects(tree))
-    # creates a slide with the layers to include or exclude
-    slide_fil = {'include': filter}
-    # get the layers as labels from slide_fil
-    layers_fil = get_filtered_layer_labels(labels_fil, slide_fil)
+    def __init__(self, basefilename, tree):
+        self.basefilename = basefilename
+        self.tree = tree
+        self.layers = self.load_layers()
 
-    if action == 'add':
-        for x in layers_fil:
-            if x not in layers:
-                #disp("*Layer %s added" % x, args, 2)
-                layers.append(x)
+    def load_layers(self):
+        """
+        Returns the list of layer objects contained in the XML tree.
+        """
+        layers = []
+        root = self.tree.getroot()
+        layers = [Layer(obj) for obj in root if Layer.is_layer(obj)]
+        return layers
 
-    if action == 'exclude':
-        for x in layers_fil:
-            if x in layers:
-                #disp("*Layer %s excluded" % x, args, 2)
-                layers.remove(x)
+    def get_labels(self):
+        """
+        Returns: a list of the labels belonging to the layers in the file
+        """
+        labels = []
+        for layer in self.layers:
+            labels.append(layer.get_label())
+        return labels
 
-    return
+    def get_filtered_layer_objs(self, labels):
+        """
+        Returns: the layer objects corresponding to the labels passed as argument.
+        """
+        layer_objs = []
+        for label in labels:
+            for layer in self.layers:
+                if layer.get_label() == label:
+                    layer_objs.append(layer)
+                    break
+        return layer_objs
+
+    def get_filtered_obj(self, layers):
+        """
+        Returns: the elementTree object that includes the layers passed as argument.
+        """
+        from copy import deepcopy
+        mytree = deepcopy(self.tree)
+        root = mytree.getroot()
+        for x in root:
+            if Layer.is_layer(x) and not Layer.match_label(x, layers):
+                root.remove(x)
+        return root
 
 
-def get_layer_objects(tree):
-    """
-    Returns the list of layer objects contained in the XML tree.
-    """
-    root = tree.getroot()
-    layers = [x for x in root if is_layer(x)]
-    return layers
+class InklayersSystem():
+
+    def __init__(self, args):
+        self.args = args
+        self.set_verbosity()
+        self.run = self.set_subprocess()
+        self.inkPath = self.verify_inkscape()
+        self.fileHandler = FileHandler()
+
+    def set_verbosity(self):
+        if self.args.get('debug'):
+            self.args['verbosity'] = 2
+
+    def set_subprocess(self):
+        if self.args.get('verbosity') >= 1:
+            run = subprocess.check_call
+        else:
+            run = subprocess.check_output
+        return run
+
+    def verify_inkscape(self):
+        """
+        Fix inkscape path and attempt to execute to verify it.
+        """
+        inkPath = self.args.get('inkscape')
+        if inkPath == 'Default':
+            if (sys.platform == 'win32'):
+                inkPath = 'C:\Progra~1\Inkscape\inkscape.com'
+            else:
+                inkPath = 'inkscape'
+        try:
+            self.run([inkPath, "-V"])
+            return inkPath
+        except Exception:
+            print('Inkscape command line executable not found.')
+            print('Set --inkscape option accordingly.')
+            sys.exit(-1)
+
+    def process_input_file(self, infile):
+        """
+        Given an input file, it loads the config data and svg_file object and
+        creates a slide configuration object.
+        """
+        self.infile_path, infile = self.fileHandler.get_path_and_fullname(infile)
+        svg_file, configFile = self.fileHandler.load_input_file(infile)
+        options = {}
+        options['add'] = self.args.get('add')
+        options['exclude'] = self.args.get('exclude')
+        options['outfile'] = self.args.get('outfile')
+        options['type'] = self.args.get('type')
+        options['split'] = self.args.get('split')
+        options['stack'] = self.args.get('stack')
+        self.slideConf = SlideConfiguration(svg_file, configFile, options)
 
 
-def get_layer_labels(objects):
-    """
-    Returns the list of labels of each layer object.
-    """
-    labels = [get_label(x) for x in objects if is_layer(x)]
-    return labels
+class InklayersShell(InklayersSystem):
+
+    def __init__(self, args):
+        InklayersSystem.__init__(self, args)
+
+    def fix_wildcard_names(self):
+        """
+        If an input file has wildcards, find results and add them to the input files
+        """
+        import glob
+        infiles = []
+        for file in self.args.get('infiles'):
+            if ('?' in file) or ('*' in file):
+                globlist = glob.glob(file)
+                for filename in globlist:
+                    infiles.append(filename)
+            else:
+                infiles.append(file)
+        self.args['infiles'] = infiles
 
 
-def report_layers_info(infile):
-    """
-    Retrieve information about layers in a SVG file.
-    Returns the set of strings to print, already formatted.
-    """
-    with open(infile) as f:
-        tree = etree.parse(f)
-        objects = get_layer_objects(tree)
-        lines = ["#%d: '%s'" % (i, get_label(x)) for i, x in enumerate(objects) if is_layer(x)]
+    def process_files(self):
+        """
+        Process the input files. If the query option was not used it also exports them to files.
+        If an exception is raised on a file, the error message is printed and the processing continues
+        to the next file.
+        """
+        self.disp('**Processing input files', 2)
+        for infile in self.args.get('infiles'):
+            try:
+                self.disp('\n**Processing: %s' %infile, 1)
+                self.process_input_file(infile)
+                self.disp('Processing done successfully', 1)
+                if not self.args.get('query'):
+                    self.disp('**Saving: %s' % infile, 1)
+                    self.save_files()
+            except Exception as e:
+                # error
+                print(e)
+                self.disp('Moving on to the next file...', 2)
+                continue
+        self.disp('\nProcessing completed.', 1)
+
+
+    def process_input_file(self, infile):
+        """
+        Overrides the superclass version.
+        Process the input file. Load the file and the configuration included in the file.
+        If the query option was specified print the layer information.
+        Otherwise load the slide configuration into a SlideConfiguration object.
+        """
+        self.infile_path, infile = self.fileHandler.get_path_and_fullname(infile)
+        svg_file, configFile = self.fileHandler.load_input_file(infile)
+        if self.args.get('query'):
+            lines = (self.report_layers_info(svg_file))
+            for l in lines:
+                print(l)
+        else:
+            options = {}
+            options['add'] = self.args.get('add')
+            options['exclude'] = self.args.get('exclude')
+            options['outfile'] = self.args.get('outfile')
+            options['type'] = self.args.get('type')
+            options['split'] = self.args.get('split')
+            options['stack'] = self.args.get('stack')
+            self.slideConf = SlideConfiguration(svg_file, configFile, options)
+
+    def save_files(self):
+        """
+        Reads all the files loaded in the slide configuration and attempts to save them.
+        If the split option was specified, it saves each slide layer to a different file.
+        Otherwise the default method is used: each slide is saved to a single file.
+        """
+        for slide in self.slideConf.slides:
+            if self.args.get('split'):
+                self.disp('\n**Saving slide in splitted mode', 1)
+                for i, layer in enumerate(slide.layers):
+                    b = self.fileHandler.get_basename(slide.filename)
+                    filename = b + '-split-' + str(i) + '.svg'
+                    layer_root = self.slideConf.svg_file.get_filtered_obj(layer.get_label())
+                    self.save_svg(filename, layer_root)
+                    self.svg2file(slide, filename)
+            else:
+                self.disp('\n**Saving slide in standard mode', 2)
+                self.save_svg(slide.filename, slide.root)
+                self.svg2file(slide)
+
+    def save_svg(self, name, root):
+        """
+        Saves the slide to a .svg file with an appropriate name.
+        """
+        filename = self.infile_path + output_subfolder + name
+        command = etree.tostring(root, encoding="unicode", pretty_print=True)
+        with open(filename, 'w') as f:
+            f.write(command)
+
+    def svg2file(self, slide, filename='slide'):
+        """
+        Uses the inkscape executable to export the file to the specified format. Extra arguments are supported.
+        The filename passed as argument can be the slide filename or the specific layer name for split mode.
+        """
+        if filename == 'slide':
+            filename = slide.filename
+        outpath = self.infile_path + output_subfolder
+        svg_file = outpath + filename
+        base_name, ext = os.path.splitext(filename)
+        outfile = outpath + base_name + '.' + slide.type
+        command = self.inkPath + ' --export-' + slide.type + ' ' + outfile + ' ' + self.args.get('extra') + ' ' + svg_file
+        self.disp("Running '%s'" % command, 2)
+        self.run(command, shell=True)
+
+
+    def report_layers_info(self, svg_file):
+        """
+        Retrieve information about layers in a SVG file.
+        Returns the set of strings to print, already formatted.
+        """
+        lines = ["#%d: '%s'" % (i, x.get_label()) for i, x in enumerate(svg_file.layers)]
         return lines
 
-
-def print_latex_code(filenames):
-    """
-    Print code for inclusion into LaTeX documents.
-    """
-    for f in filenames:
-        print('\\includegraphics[width=1.0\\columnwidth]{%s}' % f)
-
-
-def get_filenames_from_wildcard(argfiles):
-    """
-    Given the input files from the command line,
-    if wild cards are present extracts the corresponding files
-    and add them to the list to return
-    Args:
-        argfiles: the input files included in the command line arguments
-    Returns:
-        a list of all the files to process
-    """
-    infiles = []
-    for file in argfiles:
-        # if a file has wildcards, process and add results (if any)
-        if ('?' in file) or ('*' in file):
-            globlist = glob.glob(file)
-            for filename in globlist:
-                infiles.append(filename)
-        # if a file doesn't have wildcards just add it
-        else:
-            infiles.append(file)
-    return infiles
+    def disp(self, msg, level):
+        """
+        Print function that handles verbosity level.
+        """
+        try:
+            if self.args.get('verbosity') >= level:
+                print(msg)
+        except:
+            pass
 
 
-### main
+
+
 if __name__ == '__main__':
-    # handle command-line arguments
-    args = parser.parse_args()
-    args.infiles = get_filenames_from_wildcard(args.infiles)
 
-    # load verbosity level
-    if (args.debug == True):
-        args.verbosity = 2
-    if (args.verbosity >= 1):
-        run = subprocess.check_call
-    else:
-        run = subprocess.check_output
+    # load command line arguments, initialize system
+    prog = InklayersShell(get_commandLine())
+    prog.fix_wildcard_names()
 
-    # scan all input files
-    for infile_arg in args.infiles:
-        disp("\nProcessing %s file..." %infile_arg, args, 1)
-        ext, ext = split_filename(infile_arg)
+    # process input files & export/save
+    prog.process_files()
 
-        if ext == 'svg':
-            if args.query:
-                disp("Executing query...", args, 2)
-                try:
-                    print('\n* Layers in %s' % infile_arg)
-                    lines = report_layers_info(infile_arg)
-                    for l in lines:
-                        print(l)
-                    continue
-                except Exception as e:
-                    print(e)
-                    #print("Couldn't get layer info from %s..." % infile_arg)
-                    continue
-            else:
-                disp("Query option not selected, ignoring SVG file...", args, 0)
-                continue
 
-        if (ext == 'json') or (ext == 'toml'):
-            disp("Loading " + ext.upper() + " file...", args, 2)
-            try:
-                with open(infile_arg) as config_file:
-                    if ext == 'json':
-                        conf = json.load(config_file)
-                    if ext == 'toml':
-                        conf = toml.load(config_file)
-                    filenames = process_config_file(conf, args)
-                    if args.latex:
-                        print_latex_code(filenames)
-                        continue
-            except Exception as e:
-                print(e)
-                #print('File %s is not ' + ext + ' or has invalid data.' % infile_arg)
-                disp("\nMoving on to the next input file...", args, 2)
-                continue
 
-        else:
-            print("Invalid file name or format not supported")
-            disp("\nMoving on to the next input file...", args, 2)
-            continue
 
-    disp("\nAll input files processed. Program completed", args, 1)
