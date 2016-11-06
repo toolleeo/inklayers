@@ -59,8 +59,8 @@ class OptionHandler(inkex.Effect):
         args['infiles'] = self.options.configFile
         args['type'] = None if self.options.typeExp == 'None' else self.options.typeExp
         args['outfile'] = None if self.options.namefmtExp == 'None' else self.options.namefmtExp
-        args['add'] = None if self.options.addLayers == '' else [self.options.addLayers]
-        args['exclude'] = None if self.options.excludeLayers == '' else [self.options.excludeLayers]
+        args['add'] = None if self.options.addLayers == '' else self.options.addLayers.split(',')
+        args['exclude'] = None if self.options.excludeLayers == '' else self.options.excludeLayers.split(',')
         args['inkscape'] = 'Default'
         args['debug'] = True
         args['verbosity'] = 0

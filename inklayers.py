@@ -293,7 +293,7 @@ class FileHandler:
                     conf = toml.load(infile)
                     svg_name = conf['input']['filename']
                 except Exception as e:
-                    raise('Unable to load toml module or error in input file.\n' + str(e))
+                    raise Exception('Unable to load toml module or error in input file.\n' + str(e))
             elif ext not in ['.svg', '.json', '.toml']:
                 raise Exception('File type not supported')
 
