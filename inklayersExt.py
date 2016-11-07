@@ -51,30 +51,13 @@ class OptionHandler(inkex.Effect):
         #                             default=None, help="")
 
 
-    def parse_options(self):
-        """
-        Returns: a dictionary containing the arguments in the correct format for Inklayers
-        """
-        args = {}
-        args['infiles'] = self.options.configFile
-        args['type'] = None if self.options.typeExp == 'None' else self.options.typeExp
-        args['outfile'] = None if self.options.namefmtExp == 'None' else self.options.namefmtExp
-        args['add'] = None if self.options.addLayers == '' else self.options.addLayers.split(',')
-        args['exclude'] = None if self.options.excludeLayers == '' else self.options.excludeLayers.split(',')
-        args['inkscape'] = 'Default'
-        args['debug'] = True
-        args['verbosity'] = 0
-        args['extra'] = ' '
-        return args
-
-
     def effect(self):
         """
         Creates an instance of Inklayers and passes the options in the correct format
         and the svg root related to the currently opened document.
         """
         svg_root = self.document.getroot()
-        program = InklayersExtension(self.parse_options(), svg_root)
+        program = InklayersExtension(self.options, svg_root)
         try:
             program.process_file()
         except Exception as e:
@@ -86,8 +69,25 @@ class InklayersExtension(InklayersSystem):
     A version of Inklayers to be used as Inkscape extension.
     """
     def __init__(self, options, svg_root):
-        InklayersSystem.__init__(self, options)
+        InklayersSystem.__init__(self, self.parse_options(options))
         self.svg_root = svg_root
+
+    def parse_options(self, options):
+        """
+        Returns: a dictionary containing the arguments in the correct format for Inklayers
+        """
+        args = {}
+        args['infiles'] = options.configFile
+        args['type'] = None if options.typeExp == 'None' else options.typeExp
+        args['outfile'] = None if options.namefmtExp == 'None' else options.namefmtExp
+        args['add'] = None if options.addLayers == '' else options.addLayers.split(',')
+        args['exclude'] = None if options.excludeLayers == '' else options.excludeLayers.split(',')
+        args['inkscape'] = 'Default'
+        args['debug'] = True
+        args['verbosity'] = 0
+        args['extra'] = ' '
+        return args
+
 
     def process_file(self):
         """

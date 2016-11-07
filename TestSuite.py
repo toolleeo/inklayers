@@ -2,7 +2,7 @@ import unittest
 # import logging
 # import json
 from lxml import etree
-import inklayers
+import inklayers, inklayersExt
 import os
 
 test_drawing_file = 'fishes.svg'
@@ -286,16 +286,56 @@ class TestSystem(unittest.TestCase):
 
     infile_path, infile = fileHandler.get_path_and_fullname('fishes.json')
     svg, conf = fileHandler.load_input_file(infile)
-    args = {'query': False, 'infiles': ['fishes.json'], 'inkscape': 'Default', 'exclude': ['L0'], 'stack': False, 'outfile': None, 'type': 'png', 'split': False, 'outfolder': None, 'add': None, 'extra': ' ', 'latex': False, 'verbosity': 0, 'debug': True}
-    sys = inklayers.InklayersShell(args)
 
     def test_query(self):
-        lines = self.sys.report_layers_info(self.svg)
+        args = {'query': False, 'infiles': ['fishes.json'], 'inkscape': 'Default', 'exclude': ['L0'], 'stack': False,
+                'outfile': None, 'type': 'png', 'split': False, 'outfolder': None, 'add': None, 'extra': ' ',
+                'latex': False, 'verbosity': 0, 'debug': True}
+        sys = inklayers.InklayersShell(args)
+        lines = sys.report_layers_info(self.svg)
         self.assertEquals(lines, ["#0: 'L0'", "#1: 'L1'", "#2: 'L2'", "#3: 'L3'", "#4: 'L4'",
                  "#5: 'L5 msg:greetings'", "#6: 'L6'", "#7: 'L7'", "#8: 'L8'",
                  "#9: 'L9'", "#10: 'L10'", "#11: 'L11'", "#12: 'L12 msg:reply'"])
 
+    def test_extension_layer_parameters_no_filtering(self):
+        # tests slide 11 of fishes.svg (using fishes.json as configuration)
+        # default layers: ['L0', 'L1', 'L2', 'L3', 'L4', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11']
+        class ParserSimulator():
+            pass
+        options = ParserSimulator()
+        options.configFile = self.infile
+        options.typeExp = 'None'
+        options.namefmtExp = 'None'
+        options.addLayers = ''
+        options.excludeLayers = ''
+        sys = inklayersExt.InklayersExtension(options, self.svg.tree)
+        sys.process_input_file(sys.args.get('infiles'))
+        layers = []
+        for slide in sys.slideConf.slides:
+            if slide.id == 11:
+                layers = slide.get_labels()
+        self.assertEquals(layers, ['L0', 'L1', 'L2', 'L3', 'L4', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11'])
 
+    def test_extension_layer_parameters_with_filtering(self):
+        # tests slide 11 of fishes.svg (using fishes.json as configuration)
+        class ParserSimulator():
+            pass
+        options = ParserSimulator()
+        options.configFile = self.infile
+        options.typeExp = 'None'
+        options.namefmtExp = 'None'
+        options.addLayers = '#2-#4,L5 msg:greetings,L12 msg:reply'    # add an interval and two individual layers
+        options.excludeLayers = '#0-#2,L7,L9'                         # exclude an interval and two additional layers
+        sys = inklayersExt.InklayersExtension(options, self.svg.tree)
+        sys.process_input_file(sys.args.get('infiles'))
+        layers = []
+        for slide in sys.slideConf.slides:
+            if slide.id == 11:
+                layers = slide.get_labels()
+        # default layers: ['L0', 'L1', 'L2', 'L3', 'L4', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11']
+        # add layers: 2,3,4,5,12
+        # exclude layers: 0,1,2,7,9  (exclusion is done afterwards, so #2 is removed)
+        self.assertEquals(layers, ['L3', 'L4', 'L6', 'L8', 'L10', 'L11', 'L5 msg:greetings', 'L12 msg:reply'])
 
 
 if __name__ == '__main__':
