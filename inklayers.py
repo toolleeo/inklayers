@@ -102,11 +102,11 @@ def get_commandLine():
           help='Extra options passed through (literally) to inkscape for export. See Inkscape --help for more.')
     p_add('-D', '--debug', action='store_true', default=False,
           help='Generates (very) verbose output.')
-    p_add('-q', '--query', action='store_true', default=False,
+    p_add('-l', '--list', action='store_true', default=False,
           help='List the available layers.')
     p_add('-v', '--verbosity', action='count', default=0,
           help='Verbosity level.')
-    p_add('-l', '--latex', action='store_true', default=False,
+    p_add('-L', '--latex', action='store_true', default=False,
           help='Print code for inclusion into LaTeX documents.')
     p_add('-out', '--outfolder', action='store', default=None)
 
@@ -686,7 +686,7 @@ class InklayersShell(InklayersSystem):
 
     def process_files(self):
         """
-        Process the input files. If the query option was not used it also exports them to files.
+        Process the input files. If the list option was not used it also exports them to files.
         If an exception is raised on a file, the error message is printed and the processing continues
         to the next file.
         """
@@ -696,9 +696,12 @@ class InklayersShell(InklayersSystem):
                 self.disp('\n**Processing: %s' %infile, 1)
                 self.process_input_file(infile)
                 self.disp('Processing done successfully', 1)
-                if not self.args.get('query'):
+                if not self.args.get('list'):
                     self.disp('**Saving: %s' % infile, 1)
                     self.save_files()
+                    if self.args.get('latex'):
+                        self.disp('**Printing latex code: ', 1)
+                        self.print_latex_code()
             except Exception as e:
                 # error
                 print(e)
@@ -711,12 +714,12 @@ class InklayersShell(InklayersSystem):
         """
         Overrides the superclass version.
         Process the input file. Load the file and the configuration included in the file.
-        If the query option was specified print the layer information.
+        If the list option was specified print the layer information.
         Otherwise load the slide configuration into a SlideConfiguration object.
         """
         self.infile_path, infile = self.fileHandler.get_path_and_fullname(infile)
         svg_file, configFile = self.fileHandler.load_input_file(infile)
-        if self.args.get('query'):
+        if self.args.get('list'):
             lines = (self.report_layers_info(svg_file))
             for l in lines:
                 print(l)
@@ -774,7 +777,6 @@ class InklayersShell(InklayersSystem):
         self.disp("Running '%s'" % command, 2)
         self.run(command, shell=True)
 
-
     def report_layers_info(self, svg_file):
         """
         Retrieve information about layers in a SVG file.
@@ -782,6 +784,13 @@ class InklayersShell(InklayersSystem):
         """
         lines = ["#%d: '%s'" % (i, x.get_label()) for i, x in enumerate(svg_file.layers)]
         return lines
+
+    def print_latex_code(self):
+        """
+        Print code for inclusion into LaTeX documents.
+        """
+        for slide in self.slideConf.slides:
+            print('\\includegraphics[width=1.0\\columnwidth]{%s}' % slide.filename)
 
     def disp(self, msg, level):
         """
