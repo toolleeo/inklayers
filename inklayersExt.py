@@ -80,8 +80,8 @@ class InklayersExtension(InklayersSystem):
         args['infiles'] = options.configFile
         args['type'] = None if options.typeExp == 'None' else options.typeExp
         args['outfile'] = None if options.namefmtExp == 'None' else options.namefmtExp
-        args['add'] = None if options.addLayers == '' else options.addLayers.split(',')
-        args['exclude'] = None if options.excludeLayers == '' else options.excludeLayers.split(',')
+        args['add'] = None if options.addLayers == '' else [options.addLayers]
+        args['exclude'] = None if options.excludeLayers == '' else [options.excludeLayers]
         args['inkscape'] = 'Default'
         args['debug'] = True
         args['verbosity'] = 0
@@ -148,8 +148,8 @@ if __name__ == '__main__':
         inkex.errormsg("The files have been exported.")
 
     except Exception as e:
-        #import traceback
-        #inkex.errormsg(str(traceback.print_exc()))
+        import traceback
+        inkex.errormsg(str(traceback.print_exc()))
         inkex.errormsg(str(e))
 
 

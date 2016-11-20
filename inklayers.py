@@ -239,10 +239,21 @@ class StringParser:
         l = [x for x in labels if x is not None]
         return l
 
+    @staticmethod
+    def filter_slide_data(layers_data):
+        """
+        Fixes the slide data from the config file (checks for escaped characters and splits based on the comma character)
+        Returns a list containing the results.
+        """
+        import re
+        test = re.split(r'(?<!\\),', layers_data)
+        results = [t.replace('\,', ',') for t in test]
+        return results
+
 
 class FileHandler:
     """
-    It handles the loading of slide configuration from input files and the creation of
+    Handles the loading of slide configuration from input files and the creation of
     svg file instances along with a few filename operations.
     """
     output_folder = ''
@@ -277,6 +288,7 @@ class FileHandler:
         svg_name = ''
         conf = None
         ext = self.get_extension(filename)
+
         with open(filename) as infile:
             if ext == '.svg':
                 # TODO:  check if the SVG file has slide configuration included
@@ -294,7 +306,15 @@ class FileHandler:
                     svg_name = conf['input']['filename']
                 except Exception as e:
                     raise Exception('Unable to load toml module or error in input file.\n' + str(e))
-            elif ext not in ['.svg', '.json', '.toml']:
+
+            if ext == '.ini':
+                try:
+                    conf = self.load_conf_from_ini(infile)
+                    svg_name = conf['input']['filename']
+                except Exception as e:
+                    raise Exception('Error while parsing the ini file.\n' + str(e))
+
+            elif ext not in ['.svg', '.json', '.toml', '.ini']:
                 raise Exception('File type not supported')
 
         if os.path.dirname(svg_name) == '':
@@ -304,6 +324,47 @@ class FileHandler:
         svg_tree = self.get_etree(full_svg_name)
         svg_base_name = self.get_basename(svg_name)
         return SVGFile(svg_base_name, svg_tree), conf
+
+
+    def load_conf_from_ini(self, infile):
+        """
+        Retrieves the configuration from the ini file. Supports inkscape and older versions of Python
+        """
+        try:
+            import configparser
+            config = configparser.ConfigParser()
+        except:
+            try:
+                import ConfigParser
+            except Exception as e:
+                raise Exception('Unable to find configparser/ConfigParser module. \n' + str(e))
+            config = ConfigParser.ConfigParser()
+            config.readfp(infile)
+            return self._process_ini_conf(config)
+        config.read_file(infile)
+        return self._process_ini_conf(config)
+
+
+    def _process_ini_conf(self, config):
+        """
+        Handles the parsing of ini files. Returns a dictionary with the config file data.
+        """
+        conf = {'input': {'filename': None}, 'output': {'type': None, 'filename': None, 'slides': []}}
+        conf['input']['filename'] = config.get('input', 'filename')
+        conf['output']['type'] = config.get('output', 'type')
+        conf['output']['filename'] = config.get('output', 'filename', raw=True)
+        slide_sections = [section for section in config.sections() if str(section).startswith('slide_')]
+        slide_sections = sorted(slide_sections)
+
+        for slide in slide_sections:
+            elements = config.items(slide)
+            slide_data = dict(elements)
+            if 'include' in slide_data:
+                slide_data['include'] = StringParser.filter_slide_data(slide_data.get('include'))
+            if 'exclude' in slide_data:
+                slide_data['exclude'] = StringParser.filter_slide_data(slide_data.get('exclude'))
+            conf['output']['slides'].append(slide_data)
+        return conf
 
 
 class Layer():
@@ -653,14 +714,23 @@ class InklayersSystem():
         """
         self.infile_path, infile = self.fileHandler.get_path_and_fullname(infile)
         svg_file, configFile = self.fileHandler.load_input_file(infile)
+        self.slideConf = SlideConfiguration(svg_file, configFile, self.filtered_arguments())
+
+
+    def filtered_arguments(self):
+        """
+        Filters the arguments and returns only the ones needed for the slide configuration
+        """
         options = {}
-        options['add'] = self.args.get('add')
-        options['exclude'] = self.args.get('exclude')
+        add = self.args.get('add')
+        exclude = self.args.get('exclude')
+        options['add'] = StringParser.filter_slide_data(add[0]) if add is not None else add
+        options['exclude'] = StringParser.filter_slide_data(exclude[0]) if exclude is not None else exclude
         options['outfile'] = self.args.get('outfile')
         options['type'] = self.args.get('type')
         options['split'] = self.args.get('split')
         options['stack'] = self.args.get('stack')
-        self.slideConf = SlideConfiguration(svg_file, configFile, options)
+        return options
 
 
 class InklayersShell(InklayersSystem):
@@ -724,14 +794,7 @@ class InklayersShell(InklayersSystem):
             for l in lines:
                 print(l)
         else:
-            options = {}
-            options['add'] = self.args.get('add')
-            options['exclude'] = self.args.get('exclude')
-            options['outfile'] = self.args.get('outfile')
-            options['type'] = self.args.get('type')
-            options['split'] = self.args.get('split')
-            options['stack'] = self.args.get('stack')
-            self.slideConf = SlideConfiguration(svg_file, configFile, options)
+            self.slideConf = SlideConfiguration(svg_file, configFile, self.filtered_arguments())
 
     def save_files(self):
         """

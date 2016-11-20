@@ -111,6 +111,12 @@ class TestStringParser(unittest.TestCase):
         layers = inklayers.StringParser.get_filtered_layer_labels(labels, filters)
         self.assertEqual(layers, ['L1 test 2', 'L3', 'L4', 'L6 last'])
 
+    def test_layer_filtering_with_special_characters(self):
+        labels = ['L0', 'L1', 'L,2', 'L3', '#1-#2\\name#1-#4', 'L5']
+        filters = {'include': ['#0-#2','#1-#2\\name#1-#4'], 'exclude': ['L1']}
+        layers = inklayers.StringParser.get_filtered_layer_labels(labels, filters)
+        self.assertEqual(layers, ['L0', 'L,2', '#1-#2\\name#1-#4'])
+
     def test_layer_filtering_error_condition(self):
         labels = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5 msg:greetings',
                   'L6', 'L7', 'L8', 'L9', 'L10', 'L11', 'L12 msg:reply']
@@ -174,6 +180,17 @@ class TestStringParser(unittest.TestCase):
         self._test_number(60, intervals, True)
         self._test_number(70, intervals, True)
         self._test_number(71, intervals, False)
+
+    def test_filter_slide_layer_data(self):
+        layers = '#0-#2,L4'
+        results = inklayers.StringParser.filter_slide_data(layers)
+        self.assertEqual(results, ['#0-#2', 'L4'])
+        layers = '#0-#2,L4,This is a name\, ok?,L5,L6'
+        results = inklayers.StringParser.filter_slide_data(layers)
+        self.assertEqual(results, ['#0-#2', 'L4', 'This is a name, ok?', 'L5', 'L6'])
+        layers = 'L1,L2,Name\\with backslash,L5'
+        results = inklayers.StringParser.filter_slide_data(layers)
+        self.assertEqual(results, ['L1', 'L2', 'Name\\with backslash', 'L5'])
 
 
 class TestSlideConfiguration(unittest.TestCase):
@@ -330,6 +347,7 @@ class TestSystem(unittest.TestCase):
         sys.process_input_file(sys.args.get('infiles'))
         layers = []
         for slide in sys.slideConf.slides:
+            #print(slide.get_labels())
             if slide.id == 11:
                 layers = slide.get_labels()
         # default layers: ['L0', 'L1', 'L2', 'L3', 'L4', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11']
