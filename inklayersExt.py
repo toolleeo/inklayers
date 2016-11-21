@@ -148,8 +148,8 @@ if __name__ == '__main__':
         inkex.errormsg("The files have been exported.")
 
     except Exception as e:
-        import traceback
-        inkex.errormsg(str(traceback.print_exc()))
+        #import traceback
+        #inkex.errormsg(str(traceback.print_exc()))
         inkex.errormsg(str(e))
 
 

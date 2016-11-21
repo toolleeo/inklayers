@@ -357,7 +357,7 @@ class FileHandler:
         slide_sections = sorted(slide_sections)
 
         for slide in slide_sections:
-            elements = config.items(slide)
+            elements = config.items(slide, raw=True)
             slide_data = dict(elements)
             if 'include' in slide_data:
                 slide_data['include'] = StringParser.filter_slide_data(slide_data.get('include'))
@@ -410,11 +410,12 @@ class Slide:
     """
     Contains everything related to a slide: filename, id, name, type, layers, elementTree data
     """
-    def __init__(self, id, filename, name, type, layers, root):
-        self.filename = filename
+    def __init__(self, id, fname_fmt, label, type, layers, root):
         self.id = id
-        self.name = name
-        self.type = type # estensione
+        self.filename = ''
+        self.fname_fmt = fname_fmt
+        self.name = label
+        self.type = type # exported file extension
         self.layers = layers
         self.root = root
 
@@ -474,6 +475,17 @@ class SlideConfiguration:
         for index, slide in enumerate(slides):
             slide['id'] = index
         self.process_slides(slides)
+        # Sorts the slides by ID (if based-on is used they may be created in a different order sometimes).
+        self.slides.sort(key=lambda x: x.id)
+        # Sets the slide filenames. If a specific name is used for a slide, the index in the file names is not skipped
+        # but kept for the next one that doesn't use a specific name
+        bn = self.svg_file.basefilename
+        index = 0
+        for slide in self.slides:
+            fnumber = index if '%n' in slide.fname_fmt else None
+            slide.filename = StringParser.get_filename(slide.fname_fmt, basename=bn, extension='svg', index=fnumber)
+            index = index + 1 if fnumber is not None else index
+
 
     def check_unique_slide_names(self, slides):
         """
@@ -504,7 +516,7 @@ class SlideConfiguration:
                 createdSlide = self.make_slide(slide)
                 self.slides.append(createdSlide)
 
-        madeIDs = [slide.id for slide in self.slides] # the ids of the already created slides
+        madeIDs = [slide.id for slide in self.slides] # the IDs of the already created slides
         slides = [slide for slide in slides if slide['id'] not in madeIDs] # the slides remaining to be created
         new_count = len(slides)
 
@@ -525,19 +537,16 @@ class SlideConfiguration:
             filter_with_globals(self.options.get('add'), 'add')
         if self.options.get('exclude') is not None:
             filter_with_globals(self.options.get('exclude'), 'exclude')
-        # todo: order by id
 
     def make_slide(self, slide):
         """
         Creates the slide
         """
-        # Check if the slide has specific settings (a different name format or type/extension)
+        # Check if the slide has specific settings (a different file name/format or type/extension)
         fname_fmt = self.get_slide_specific_setting(slide, self.options.get('outfile'), self.fname_fmt, 'filename')
         type = self.get_slide_specific_setting(slide, self.options.get('type'), self.type, 'type')
-        # Set the slide name and filename
-        name = slide.get('name') if 'name' in slide else ''
-        bn = self.svg_file.basefilename
-        fname = StringParser.get_filename(fname_fmt, basename=bn, extension='svg', index=slide.get('id'))
+        # Set the slide label
+        slide_label = slide.get('name') if 'name' in slide else ''
 
         labels = self.svg_file.get_labels()
         layers = []
@@ -558,8 +567,7 @@ class SlideConfiguration:
 
         root = self.svg_file.get_filtered_obj(layers)
         layer_objs = self.svg_file.get_filtered_layer_objs(layers)
-        return Slide(slide.get('id'), fname, name, type, layer_objs, root)
-
+        return Slide(slide.get('id'), fname_fmt, slide_label, type, layer_objs, root)
 
     def filter_layers(self, filter, action, layers):
         """
