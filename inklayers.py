@@ -256,8 +256,6 @@ class FileHandler:
     Handles the loading of slide configuration from input files and the creation of
     svg file instances along with a few filename operations.
     """
-    output_folder = ''
-
     def get_path_and_fullname(self, file):
         """
         Returns the path and the fullname (path + filename) of a file
@@ -293,7 +291,8 @@ class FileHandler:
             if ext == '.svg':
                 # TODO:  check if the SVG file has slide configuration included
                 # conf = None
-                #raise ('Unable to load config from %s. Function not yet supported.' % filename)
+                # raise Exception('Unable to load config from svg file. Function not yet supported.')
+                conf = {}
                 svg_name = filename
             if ext == '.json':
                 import json
@@ -304,16 +303,18 @@ class FileHandler:
                     import pytoml as toml
                     conf = toml.load(infile)
                     svg_name = conf['input']['filename']
+                except ImportError:
+                    raise
                 except Exception as e:
-                    raise Exception('Unable to load toml module or error in input file.\n' + str(e))
-
+                    raise Exception('Error while loading configuration from toml file.\n' + str(e))
             if ext == '.ini':
                 try:
-                    conf = self.load_conf_from_ini(infile)
+                    conf = self._load_conf_from_ini(infile)
                     svg_name = conf['input']['filename']
+                except ImportError:
+                    raise
                 except Exception as e:
-                    raise Exception('Error while parsing the ini file.\n' + str(e))
-
+                    raise Exception('Error while parsing the ini file. ' + str(e))
             elif ext not in ['.svg', '.json', '.toml', '.ini']:
                 raise Exception('File type not supported')
 
@@ -326,9 +327,9 @@ class FileHandler:
         return SVGFile(svg_base_name, svg_tree), conf
 
 
-    def load_conf_from_ini(self, infile):
+    def _load_conf_from_ini(self, infile):
         """
-        Retrieves the configuration from the ini file. Supports inkscape and older versions of Python
+        Retrieves the configuration from the ini file. Supports different versions of Python.
         """
         try:
             import configparser
@@ -336,8 +337,8 @@ class FileHandler:
         except:
             try:
                 import ConfigParser
-            except Exception as e:
-                raise Exception('Unable to find configparser/ConfigParser module. \n' + str(e))
+            except ImportError:
+                raise ImportError('Unable to find configparser/ConfigParser module.')
             config = ConfigParser.ConfigParser()
             config.readfp(infile)
             return self._process_ini_conf(config)
@@ -408,7 +409,7 @@ class Layer():
 
 class Slide:
     """
-    Contains everything related to a slide: filename, id, name, type, layers, elementTree data
+    Contains everything related to a slide: id, filename, label, type, layers, elementTree data
     """
     def __init__(self, id, fname_fmt, label, type, layers, root):
         self.id = id
@@ -460,8 +461,8 @@ class SlideConfiguration:
         """
         try:
             return conf[key1][key2]
-        except:
-            raise Exception("Config file format error: " + key1 + " -> " + key2 + " not found.")
+        except KeyError:
+            raise KeyError("Config file format error: " + key1 + " -> " + key2 + " not found.")
 
     def load_slides(self, slides):
         """
@@ -486,11 +487,10 @@ class SlideConfiguration:
             slide.filename = StringParser.get_filename(slide.fname_fmt, basename=bn, extension='svg', index=fnumber)
             index = index + 1 if fnumber is not None else index
 
-
     def check_unique_slide_names(self, slides):
         """
         Verifies if a slide name is repeated more than once
-        (That would cause a problem with based-on slides
+        (That would cause a problem with based-on slides)
         """
         names = [slide.get('name') for slide in slides if slide.get('name') != None]
         if names == []:
@@ -498,7 +498,7 @@ class SlideConfiguration:
         count = [names.count(name) for name in set(names)]
         for x in count:
             if x > 1:
-                raise Exception("Error in config file: two slides with the same name found.")
+                raise Exception("Error in slide configuration: two slides with the same name found.")
 
     def process_slides(self, slides):
         """
@@ -524,7 +524,7 @@ class SlideConfiguration:
             self.process_slides(slides)
         # if there are slides left and no more slides were created in this iteration then there must be an error
         if new_count == old_count:
-            raise Exception('Wrong based-on names or circular based-on detected')
+            raise Exception('Error in slide configuration. Wrong based-on names or circular based-on detected.')
         # Filter the slides using global parameters (specified by command line or gui)
         def filter_with_globals(param, action):
             for slide in self.slides:
@@ -632,9 +632,9 @@ class SVGFile():
     def __init__(self, basefilename, tree):
         self.basefilename = basefilename
         self.tree = tree
-        self.layers = self.load_layers()
+        self.layers = self._load_layers()
 
-    def load_layers(self):
+    def _load_layers(self):
         """
         Returns the list of layer objects contained in the XML tree.
         """
@@ -710,10 +710,9 @@ class InklayersSystem():
         try:
             self.run([inkPath, "-V"])
             return inkPath
-        except Exception:
-            print('Inkscape command line executable not found.')
-            print('Set --inkscape option accordingly.')
-            sys.exit(-1)
+        except FileNotFoundError:
+            raise FileNotFoundError('Inkscape command line executable not found.\nSet --inkscape option accordingly.')
+
 
     def process_input_file(self, infile):
         """
@@ -781,9 +780,9 @@ class InklayersShell(InklayersSystem):
                         self.disp('**Printing latex code: ', 1)
                         self.print_latex_code()
             except Exception as e:
-                # error
-                print(e)
-                self.disp('Moving on to the next file...', 2)
+                print('\t***Error while processing: {}'.format(infile))
+                print('\t***{}: {}'.format(type(e).__name__, e))
+                self.disp('\nMoving on to the next file...', 2)
                 continue
         self.disp('\nProcessing completed.', 1)
 
@@ -796,12 +795,13 @@ class InklayersShell(InklayersSystem):
         Otherwise load the slide configuration into a SlideConfiguration object.
         """
         self.infile_path, infile = self.fileHandler.get_path_and_fullname(infile)
-        svg_file, configFile = self.fileHandler.load_input_file(infile)
         if self.args.get('list'):
+            svg_file, configFile = self.fileHandler.load_input_file(infile)
             lines = (self.report_layers_info(svg_file))
             for l in lines:
                 print(l)
         else:
+            svg_file, configFile = self.fileHandler.load_input_file(infile)
             self.slideConf = SlideConfiguration(svg_file, configFile, self.filtered_arguments())
 
     def save_files(self):
@@ -879,11 +879,15 @@ class InklayersShell(InklayersSystem):
 if __name__ == '__main__':
 
     # load command line arguments, initialize system
-    prog = InklayersShell(get_commandLine())
-    prog.fix_wildcard_names()
-
-    # process input files & export/save
-    prog.process_files()
+    try:
+        prog = InklayersShell(get_commandLine())
+    except Exception as e:
+        print('\t***Error while initializing the program.')
+        print('\t***{}: {}'.format(type(e).__name__, e))
+    else:
+        prog.fix_wildcard_names()
+        # process input files & export/save
+        prog.process_files()
 
 
 

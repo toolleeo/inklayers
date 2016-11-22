@@ -216,7 +216,7 @@ class TestSlideConfiguration(unittest.TestCase):
         slides = [{'name': 'slide1'}, {'name': 'slide2'}]
         self.slideConf.check_unique_slide_names(slides)
         slides = [{'name': 'slide1'}, {'name': 'slide1'}, {}]
-        with self.assertRaisesRegexp(Exception, 'Error in config file: two slides with the same name found.'):
+        with self.assertRaisesRegexp(Exception, 'Error in slide configuration: two slides with the same name found.'):
             self.slideConf.check_unique_slide_names(slides)
 
     def test_filter_layers(self):
@@ -305,7 +305,7 @@ class TestSystem(unittest.TestCase):
     svg, conf = fileHandler.load_input_file(infile)
 
     def test_query(self):
-        args = {'query': False, 'infiles': ['fishes.json'], 'inkscape': 'Default', 'exclude': ['L0'], 'stack': False,
+        args = {'infiles': ['fishes.json'], 'inkscape': 'Default', 'exclude': ['L0'], 'stack': False,
                 'outfile': None, 'type': 'png', 'split': False, 'outfolder': None, 'add': None, 'extra': ' ',
                 'latex': False, 'verbosity': 0, 'debug': True}
         sys = inklayers.InklayersShell(args)

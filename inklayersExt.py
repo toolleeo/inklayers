@@ -60,8 +60,8 @@ class OptionHandler(inkex.Effect):
         program = InklayersExtension(self.options, svg_root)
         try:
             program.process_file()
-        except Exception as e:
-            raise e
+        except Exception:
+            raise
 
 
 class InklayersExtension(InklayersSystem):
@@ -150,7 +150,9 @@ if __name__ == '__main__':
     except Exception as e:
         #import traceback
         #inkex.errormsg(str(traceback.print_exc()))
-        inkex.errormsg(str(e))
+
+        error_str = 'An error was found.\n{0}: {1}'.format(type(e).__name__, e)
+        inkex.errormsg(str(error_str))
 
 
 
