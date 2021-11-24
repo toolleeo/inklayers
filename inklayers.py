@@ -877,12 +877,16 @@ class InklayersShell(InklayersSystem):
             print(msg)
 
 
-if __name__ == '__main__':
+def main():
     # load command line arguments, initialize system
     prog = InklayersShell(get_commandLine())
     prog.fix_wildcard_names()
     # process input files & export/save
     prog.process_files()
+
+
+if __name__ == '__main__':
+    main()
 
 
 
