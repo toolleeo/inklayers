@@ -309,21 +309,11 @@ class FileHandler:
                 conf = json.load(infile)
                 svg_name = conf['input']['filename']
             if ext == '.toml':
-                try:
-                    conf = toml.load(infile)
-                    svg_name = conf['input']['filename']
-                except ImportError:
-                    raise
-                except Exception as e:
-                    raise Exception('Error while loading configuration from toml file.\n' + str(e))
+                conf = toml.load(infile)
+                svg_name = conf['input']['filename']
             if ext == '.ini':
-                try:
-                    conf = self._load_conf_from_ini(infile)
-                    svg_name = conf['input']['filename']
-                except ImportError:
-                    raise
-                except Exception as e:
-                    raise Exception('Error while parsing the ini file. ' + str(e))
+                conf = self._load_conf_from_ini(infile)
+                svg_name = conf['input']['filename']
             elif ext not in ['.svg', '.json', '.toml', '.ini']:
                 raise Exception('File type not supported')
 
