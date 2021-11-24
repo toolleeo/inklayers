@@ -315,7 +315,7 @@ class FileHandler:
                 conf = self._load_conf_from_ini(infile)
                 svg_name = conf['input']['filename']
             elif ext not in ['.svg', '.json', '.toml', '.ini']:
-                raise Exception('File type not supported')
+                raise Exception('File type "{}" not supported'.format(ext))
 
         if os.path.dirname(svg_name) == '':
             full_svg_name = os.path.dirname(filename) + '/' + svg_name
