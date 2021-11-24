@@ -886,24 +886,16 @@ class InklayersShell(InklayersSystem):
         """
         Print function that handles verbosity level.
         """
-        try:
-            if self.args.get('verbosity') >= level:
-                print(msg)
-        except:
-            pass
+        if self.args.get('verbosity') >= level:
+            print(msg)
 
 
 if __name__ == '__main__':
     # load command line arguments, initialize system
-    try:
-        prog = InklayersShell(get_commandLine())
-    except Exception as e:
-        print('\t***Error while initializing the program.')
-        print('\t***{}: {}'.format(type(e).__name__, e))
-    else:
-        prog.fix_wildcard_names()
-        # process input files & export/save
-        prog.process_files()
+    prog = InklayersShell(get_commandLine())
+    prog.fix_wildcard_names()
+    # process input files & export/save
+    prog.process_files()
 
 
 
