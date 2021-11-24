@@ -27,6 +27,7 @@ import os
 from lxml import etree
 import argparse
 import pathlib
+import semantic_version
 
 # The subfolder used to save/export files. It's relative to the input file.
 output_subfolder = '/output/'
@@ -684,7 +685,7 @@ class InklayersSystem():
         self.args = args
         self.set_verbosity()
         self.run = self.set_subprocess()
-        self.inkPath = self.verify_inkscape()
+        self.inkPath, self.version = self.verify_inkscape()
         self.fileHandler = FileHandler()
 
     def set_verbosity(self):
@@ -710,7 +711,9 @@ class InklayersSystem():
                 inkPath = 'inkscape'
         try:
             self.run([inkPath, "-V"])
-            return inkPath
+            output = subprocess.check_output([inkPath, '-V'])
+            version = semantic_version.Version(str(output).split(' ')[1])
+            return inkPath, version
         except FileNotFoundError:
             raise FileNotFoundError('Inkscape command line executable not found.\nSet --inkscape option accordingly.')
 
@@ -836,6 +839,14 @@ class InklayersShell(InklayersSystem):
         with open(filename, 'w') as f:
             f.write(command)
 
+    def format_inkscape_command(self, slide_type, svg_file, outfile, extra_args=''):
+        """Builds the command to call inkscape depending on its version."""
+        if self.version.major == 0 and self.version.minor > 91:
+            command = '{} --export-{} {} {} {}'.format(self.inkPath, slide_type, outfile, extra_args, svg_file)
+        elif self.version.major >= 1:
+            command = '{} --export-type={} {} -o {} {}'.format(self.inkPath, slide_type, svg_file, outfile, extra_args)
+        return command
+
     def svg2file(self, slide, filename='slide'):
         """
         Uses the inkscape executable to export the file to the specified format. Extra arguments are supported.
@@ -849,7 +860,7 @@ class InklayersShell(InklayersSystem):
         svg_file = outpath + filename
         base_name, ext = os.path.splitext(filename)
         outfile = outpath + base_name + '.' + slide.type
-        command = self.inkPath + ' --export-' + slide.type + ' ' + outfile + ' ' + self.args.get('extra') + ' ' + svg_file
+        command = self.format_inkscape_command(slide.type, svg_file, outfile, self.args.get('extra'))
         self.disp("Running '%s'" % command, 2)
         self.run(command, shell=True)
 
