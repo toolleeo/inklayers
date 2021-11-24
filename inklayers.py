@@ -145,14 +145,16 @@ class StringParser:
 
     @staticmethod
     def parse_interval_string(s):
-        """
-        Parse the layer indexing string.
+        """Parse the layer indexing string.
+
         Intervals can be defined by one number or two numbers separated by dash.
         Each number is prefixed by '#'.
         Different intervals can be separated by comma.
-        Returns a list of tuples. Each tuple is the closed interval of layer indexes.
-        Examples:
 
+        Returns a list of tuples.
+        Each tuple is the closed interval of layer indexes.
+
+        Examples:
           "#0-#10" -> [(0, 10)]
           "#0,#10" -> [(0, 0), (10, 10)]
           "#0,#10-#15,#30" -> [(0, 0), (10, 15), (30, 30)]
@@ -243,8 +245,9 @@ class StringParser:
 
     @staticmethod
     def filter_slide_data(layers_data):
-        """
-        Fixes the slide data from the config file (checks for escaped characters and splits based on the comma character)
+        """Fixes the slide data from the config file.
+
+        Checks for escaped characters and splits based on the comma character.
         Returns a list containing the results.
         """
         import re
