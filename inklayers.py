@@ -507,7 +507,7 @@ class SlideConfiguration:
         """
         old_count = len(slides)
         def madeNames(): # Returns the names of the slides already created (required by the based-on slides)
-            return [slide.name for slide in self.slides if slide.name is not '']
+            return [slide.name for slide in self.slides if slide.name != '']
 
         for slide in slides:
             # If a slide is not based on another one or it is but the other was already created then make it now
