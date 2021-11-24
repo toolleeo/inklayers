@@ -37,7 +37,7 @@ def get_commandLine():
           help='Add layers to export. Use labels or indexes.')
     p_add('-e', '--exclude', action='append', default=None,
           help='Use label or index to determine which objects to exclude from export')
-    p_add('-o', '--outfile', action='store', default=None, choices=['%b-%n.%e', '%b_%n.%e', '%n-%b.%e'],
+    p_add('-o', '--outfile', action='store', default='%b-%n.%e',
           help='Output file format. See documentation for possible formats.')
     p_add('-i', '--inkscape', action='store', default='Default',
           help='Path to inkscape command line executable')
