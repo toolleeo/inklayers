@@ -1,0 +1,5 @@
+configparser==5.1.0
+inkex==1.0.1
+lxml==4.6.4
+pytoml==0.1.21
+semantic-version==2.8.5
