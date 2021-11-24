@@ -26,6 +26,7 @@ import sys
 import os
 from lxml import etree
 import argparse
+import pathlib
 
 # The subfolder used to save/export files. It's relative to the input file.
 output_subfolder = '/output/'
@@ -828,6 +829,8 @@ class InklayersShell(InklayersSystem):
         """
         Saves the slide to a .svg file with an appropriate name.
         """
+        p = pathlib.Path(self.infile_path + output_subfolder)
+        p.mkdir(parents=True, exist_ok=True)
         filename = self.infile_path + output_subfolder + name
         command = etree.tostring(root, encoding="unicode", pretty_print=True)
         with open(filename, 'w') as f:
@@ -840,6 +843,8 @@ class InklayersShell(InklayersSystem):
         """
         if filename == 'slide':
             filename = slide.filename
+        p = pathlib.Path(self.infile_path + output_subfolder)
+        p.mkdir(parents=True, exist_ok=True)
         outpath = self.infile_path + output_subfolder
         svg_file = outpath + filename
         base_name, ext = os.path.splitext(filename)
