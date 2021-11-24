@@ -893,10 +893,7 @@ class InklayersShell(InklayersSystem):
             pass
 
 
-
-
 if __name__ == '__main__':
-
     # load command line arguments, initialize system
     try:
         prog = InklayersShell(get_commandLine())
