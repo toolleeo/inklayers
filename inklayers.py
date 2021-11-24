@@ -25,12 +25,12 @@ import subprocess
 import sys
 import os
 from lxml import etree
+import argparse
 
 # The subfolder used to save/export files. It's relative to the input file.
 output_subfolder = '/output/'
 
 def get_commandLine():
-    import argparse
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
                                      description='''Exports combinations of layers from an SVG file to various formats (PDF, PNG, etc.).''',
                                      usage="%(prog)s [-h] infiles+ [options]",
