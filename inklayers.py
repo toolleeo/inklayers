@@ -28,6 +28,13 @@ from lxml import etree
 import argparse
 import pathlib
 import semantic_version
+import glob
+import re
+import json
+import pytoml as toml
+import configparser
+from copy import deepcopy
+
 
 # The subfolder used to save/export files. It's relative to the input file.
 output_subfolder = '/output/'
@@ -250,7 +257,6 @@ class StringParser:
         Checks for escaped characters and splits based on the comma character.
         Returns a list containing the results.
         """
-        import re
         test = re.split(r'(?<!\\),', layers_data)
         results = [t.replace('\,', ',') for t in test]
         return results
@@ -300,12 +306,10 @@ class FileHandler:
                 conf = {}
                 svg_name = filename
             if ext == '.json':
-                import json
                 conf = json.load(infile)
                 svg_name = conf['input']['filename']
             if ext == '.toml':
                 try:
-                    import pytoml as toml
                     conf = toml.load(infile)
                     svg_name = conf['input']['filename']
                 except ImportError:
@@ -337,13 +341,8 @@ class FileHandler:
         Retrieves the configuration from the ini file. Supports different versions of Python.
         """
         try:
-            import configparser
             config = configparser.ConfigParser()
         except:
-            try:
-                import ConfigParser
-            except ImportError:
-                raise ImportError('Unable to find configparser/ConfigParser module.')
             config = ConfigParser.ConfigParser()
             config.readfp(infile)
             return self._process_ini_conf(config)
@@ -673,7 +672,6 @@ class SVGFile():
         """
         Returns: the elementTree object that includes the layers passed as argument.
         """
-        from copy import deepcopy
         mytree = deepcopy(self.tree)
         root = mytree.getroot()
         for x in root:
@@ -756,7 +754,6 @@ class InklayersShell(InklayersSystem):
         """
         If an input file has wildcards, find results and add them to the input files
         """
-        import glob
         infiles = []
         for file in self.args.get('infiles'):
             if ('?' in file) or ('*' in file):
