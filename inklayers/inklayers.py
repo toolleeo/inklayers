@@ -19,6 +19,7 @@ import json
 import pytoml as toml
 import configparser
 from copy import deepcopy
+from math import log10
 
 
 # The subfolder used to save/export files. It's relative to the input file.
@@ -411,11 +412,12 @@ class SlideConfiguration:
         # Sets the slide filenames. If a specific name is used for a slide, the index in the file names is not skipped
         # but kept for the next one that doesn't use a specific name
         bn = self.svg_file.basefilename
-        index = 0
-        for slide in self.slides:
-            fnumber = index if '%n' in slide.fname_fmt else None
+        for index, slide in enumerate(self.slides):
+            if '%n' in slide.fname_fmt:
+                fnumber = str(index).zfill(1 + int(log10(len(self.slides))))
+            else:
+                fnumber = None
             slide.filename = StringParser.get_filename(slide.fname_fmt, basename=bn, extension='svg', index=fnumber)
-            index = index + 1 if fnumber is not None else index
 
     def check_unique_slide_names(self, slides):
         """
