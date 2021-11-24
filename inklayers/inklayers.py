@@ -701,21 +701,15 @@ class InklayersShell(InklayersSystem):
         """
         self.disp('**Processing input files', 2)
         for infile in self.args.get('infiles'):
-            try:
-                self.disp('\n**Processing: %s' %infile, 1)
-                self.process_input_file(infile)
-                self.disp('Processing done successfully', 1)
-                if not self.args.get('list'):
-                    self.disp('**Saving: %s' % infile, 1)
-                    self.save_files()
-                    if self.args.get('latex'):
-                        self.disp('**Printing latex code: ', 1)
-                        self.print_latex_code()
-            except Exception as e:
-                print('\t***Error while processing: {}'.format(infile))
-                print('\t***{}: {}'.format(type(e).__name__, e))
-                self.disp('\nMoving on to the next file...', 2)
-                continue
+            self.disp('\n**Processing: %s' %infile, 1)
+            self.process_input_file(infile)
+            self.disp('Processing done successfully', 1)
+            if not self.args.get('list'):
+                self.disp('**Saving: %s' % infile, 1)
+                self.save_files()
+                if self.args.get('latex'):
+                    self.disp('**Printing latex code: ', 1)
+                    self.print_latex_code()
         self.disp('\nProcessing completed.', 1)
 
 
