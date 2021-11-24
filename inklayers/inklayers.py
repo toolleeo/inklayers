@@ -1,25 +1,10 @@
 #!/usr/bin/env python
 """
-svg-export-layers
+inklayers
 
-@link https://github.com/toolleeo/svg-export-layers
+@link https://github.com/toolleeo/inklayers
 
 Export any combination of SVG layers to files.
-By default the exported file is in SVG format.
-If Inkscape is found in the system, an automatic conversion to
-Inkscape supported formats (png, pdf, ps, eps) can be done.
-Tested with Inkscape version 0.91.
-
-Layers can be referenced by label or index (#0, #1, ...).
-The first layer has index 0.
-Layer's interval is supported. Example format: #1-#9.
-
-Layers can be selected for inclusion or exclusion.
-If include/exclude options collide, the latest prevails.
-
-TODO: redefine the license.
- * This software is release under the terms of .................
- *
 """
 import subprocess
 import sys
@@ -43,56 +28,7 @@ def get_commandLine():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
                                      description='''Exports combinations of layers from an SVG file to various formats (PDF, PNG, etc.).''',
                                      usage="%(prog)s [-h] infiles+ [options]",
-                                     epilog='''
-
-    Requirements
-        This program requires Inkscape 0.48+ and Python 3.0+
-        Tested with Inkscape version 0.91.
-
-    Behaviour:
-        The program exports any combination of SVG layers to files.
-        By default the exported file is in SVG format.
-        If Inkscape is found in the system, an automatic conversion to
-        Inkscape supported formats (png, pdf, ps, eps) can be done.
-
-        Multiple config file formats are currently supported: JSON and TOML.
-
-        Layers can be referenced by label or index (#0, #1, ...).
-        The first layer has index 0.
-        Layer's interval is supported. Example format: #1-#9.
-
-        Layers can be selected for inclusion or exclusion.
-        If include/exclude options collide, the latest prevails.
-
-        Wildcards for input files are supported.
-
-    Examples:
-        %(prog)s *.svg -q
-        lists the avaiable layers for all the SVG files found in the folder.
-
-        %(prog)s file.json -eL0 -e#2-#4
-        exports the slides included in the config file by processing the svg file specified
-        and excludes the layers labelled "L0", #2, #3, #4
-
-        %(prog)s file.json -o(format)
-        exports the slides included in the config file by processing the svg file specified
-        and sets the output filename format (number-basename.extension for example)
-        (overrides the config file setting)
-
-        %(prog)s file.json -tpng
-        exports the slides included in the config file by processing the svg file specified
-        and sets the output file type
-        (overrides the config file setting)
-
-        %(prog)s file.svg file-?.svg file2.json -q -v
-        lists the avaiable layers on: file.svg and any file starting with file-?.svg
-        and also all exports the slides from the file specified in file2.json
-        (level-1 verbosity)
-
-        %(prog)s file.json -X-S
-        returns a comma separated list of id, x, y, w, and h for all objects
-
-    ''')
+    )
 
     p_add = parser.add_argument
     p_add('infiles', nargs='+',
