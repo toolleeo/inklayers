@@ -52,8 +52,6 @@ def get_commandLine():
           help='List the available layers.')
     p_add('-v', '--verbosity', action='count', default=0,
           help='Verbosity level.')
-    p_add('-L', '--latex', action='store_true', default=False,
-          help='Print code for inclusion into LaTeX documents.')
     p_add('-out', '--outfolder', action='store', default=None)
 
     group = parser.add_mutually_exclusive_group()
@@ -707,9 +705,8 @@ class InklayersShell(InklayersSystem):
             if not self.args.get('list'):
                 self.disp('**Saving: %s' % infile, 1)
                 self.save_files()
-                if self.args.get('latex'):
-                    self.disp('**Printing latex code: ', 1)
-                    self.print_latex_code()
+                self.disp('**Printing latex code: ', 1)
+                self.print_latex_code(infile)
         self.disp('\nProcessing completed.', 1)
 
 
@@ -794,12 +791,16 @@ class InklayersShell(InklayersSystem):
         lines = ["#%d: '%s'" % (i, x.get_label()) for i, x in enumerate(svg_file.layers)]
         return lines
 
-    def print_latex_code(self):
+    def print_latex_code(self, infile):
         """
         Print code for inclusion into LaTeX documents.
         """
-        for slide in self.slideConf.slides:
-            print('\\includegraphics[width=1.0\\columnwidth]{%s}' % slide.filename)
+        latex_basename = self.fileHandler.get_basename(infile)
+        outpath = self.infile_path + output_subfolder
+        fullpath = outpath + latex_basename + '.inc.tex'
+        with open(fullpath, 'w') as outfile:
+            for slide in self.slideConf.slides:
+                outfile.write('\\includegraphics[width=1.0\\columnwidth]{{{}}}\n'.format(slide.filename))
 
     def disp(self, msg, level):
         """
