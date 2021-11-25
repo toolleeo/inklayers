@@ -792,15 +792,16 @@ class InklayersShell(InklayersSystem):
         return lines
 
     def print_latex_code(self, infile):
-        """
-        Print code for inclusion into LaTeX documents.
+        """Print code for inclusion into LaTeX documents.
         """
         latex_basename = self.fileHandler.get_basename(infile)
         outpath = self.infile_path + output_subfolder
         fullpath = outpath + latex_basename + '.inc.tex'
-        with open(fullpath, 'w') as outfile:
+        with open(fullpath, 'w') as latex_file:
             for slide in self.slideConf.slides:
-                outfile.write('\\includegraphics[width=1.0\\columnwidth]{{{}}}\n'.format(slide.filename))
+                base_name, ext = os.path.splitext(slide.filename)
+                slide_name = base_name + '.' + slide.type
+                latex_file.write('\\includegraphics[width=1.0\\columnwidth]{{{}}}\n'.format(slide_name))
 
     def disp(self, msg, level):
         """
