@@ -1,6 +1,6 @@
 # General description
 
-inklayers exports layers from an SVG file.
+inklayers is a command line program that exports layers from an SVG file.
 It can be used to create slide shows by editing a single SVG file.
 
 By default the exported files are in SVG format too.
@@ -15,13 +15,26 @@ If the content of an Inkscape session looks like the one in the following screen
 
 ![](screenshot.png)
 
-the layers exported can be arranged in a slideshow as follows:
+the layers exported can be arranged in a slideshow, obtaining the following result:
 
 ![](slideshow.gif)
+
+# Rationale
+
+I developed inklayers as a tool to make it easier to work at graphical content that could be used to arrange "animated" content in LaTeX Beamer presentations.
+
+I always used Inkscape for drawing pictures for my LaTeX presentations, after moving from the venerable [XFig](http://mcj.sourceforge.net/).
+
+However, working with one file for each "slide" was really cumbersome, mainly because the slides typically contain very similar content (they are meant to compose a slideshow, afterall...), and making changes to one slide often requires to propagate the changes to many other files, making the approach almost unfeasible.
+
+With inklayers there is only one SVG files containing all the graphical material of the slideshow, and changes to one layer are automatically replicated to all the slides during the export.
+
+Although the organization of a slideshow still requires some attention, it is much more affordable.
 
 # Compatibility
 
 The extraction of layers in SVG format should work on any system.
+I tested it under Linux only.
 
 The conversion with Inkscape was tested using Inkscape version 0.91 and 1.1.1 under Ubuntu 20.04.
 
