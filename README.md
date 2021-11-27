@@ -16,7 +16,7 @@ If the content of an Inkscape session looks like the one in the following screen
 
 the layers exported can be arranged in a slideshow as follows:
 
-![](slideshow.png)
+![](slideshow.gif)
 
 # Compatibility
 
