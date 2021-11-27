@@ -1,10 +1,9 @@
 # General description
 
-inklayers export layers from an SVG file.
+inklayers exports layers from an SVG file.
 It can be used to create slide shows by editing a single SVG file.
 
 By default the exported files are in SVG format too.
-
 If [Inkscape](https://inkscape.org/) is found in the system, an automatic conversion of each single exported layer to Inkscape supported formats (png, pdf, ps, eps) can be done.
 
 A project can be specified using a file format based on JSON, INI, or TOML formats.
