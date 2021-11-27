@@ -10,6 +10,14 @@ If Inkscape is found in the system, an automatic conversion of each single expor
 A project can be specified using a file format based on JSON, INI, or TOML formats.
 The project file allows to specify complex organizations of layers to be combined into "slides".
 
+If the content of an Inkscape session looks like the one in the following screenshot
+
+![](screenshot.png)
+
+the layers exported can be arranged in a slideshow as follows:
+
+![](slideshow.png)
+
 # Compatibility
 
 The extraction of layers in SVG format should work on any system.
@@ -47,14 +55,20 @@ cd examples
 run
 
 ```
-inklayers fishes.json
+inklayers fishes2.json
 ```
 
 The exported layers and their conversions are saved in `output/` under the current directory.
 
+Assuming that Imagemagick is installed in the system, the slideshow as animated GIF in the above example can be obtained with the following command:
+
+```
+convert -delay 75 -loop 0 output/*.png slideshow.gif
+```
+
 # Reference to layers
 
-Layers can be referenced by label or index (#0, #1, ...).
+Layers can be referenced by label or index (#0, #1, ...), or by layer's name.
 The first layer has index 0.
 Layer's interval is supported. Example format: #1-#9.
 
