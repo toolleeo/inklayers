@@ -25,7 +25,7 @@ I developed inklayers as a tool to make it easier to work at graphical content t
 
 I always used Inkscape for drawing pictures for my LaTeX presentations, after moving from the venerable [XFig](http://mcj.sourceforge.net/).
 
-However, working with one file for each "slide" was really cumbersome, mainly because the slides typically contain very similar content (they are meant to compose a slideshow, afterall...), and making changes to one slide often requires to propagate the changes to many other files, making the approach almost unfeasible.
+However, working with one file for each "slide" was really cumbersome, mainly because the slides typically contain very similar content (they are meant to compose a slideshow, after all...), and making changes to one slide often requires to propagate the changes to many other files, making the approach almost unfeasible.
 
 With inklayers there is only one SVG files containing all the graphical material of the slideshow, and changes to one layer are automatically replicated to all the slides during the export.
 
