@@ -77,6 +77,8 @@ If include/exclude options collide, the latest prevails.
 
 # Project file format
 
+An example project file look like the following:
+
 ```
 {
   "input": {
@@ -104,3 +106,12 @@ If include/exclude options collide, the latest prevails.
   }
 }
 ```
+
+The project file allows to specify:
+
+- the input file name
+- the format of the generated slides (pdf, png, svg)
+- the format of the filenames of the slides (`%b` is the basename of the input file, `%n` is an increasing ordinal number, `%e` is the extension)
+- the list of slides
+
+Each slide can be specified to include and/or exclude a set of layers.
