@@ -798,10 +798,10 @@ class InklayersShell(InklayersSystem):
         outpath = self.infile_path + output_subfolder
         fullpath = outpath + latex_basename + '.inc.tex'
         with open(fullpath, 'w') as latex_file:
-            for slide in self.slideConf.slides:
+            for i, slide in enumerate(self.slideConf.slides):
                 base_name, ext = os.path.splitext(slide.filename)
                 slide_name = base_name + '.' + slide.type
-                latex_file.write('\\includegraphics[width=1.0\\columnwidth]{{{}}}\n'.format(slide_name))
+                latex_file.write('\\includegraphics<{}|handout:0>[width=1.0\\columnwidth]{{{}}}%\n'.format(i + 1, slide_name))
 
     def disp(self, msg, level):
         """
