@@ -5,10 +5,12 @@ It can be used to create slide shows by editing a single SVG file.
 
 By default the exported files are in SVG format too.
 
-If Inkscape is found in the system, an automatic conversion of each single exported layer to Inkscape supported formats (png, pdf, ps, eps) can be done.
+If [Inkscape](https://inkscape.org/) is found in the system, an automatic conversion of each single exported layer to Inkscape supported formats (png, pdf, ps, eps) can be done.
 
 A project can be specified using a file format based on JSON, INI, or TOML formats.
 The project file allows to specify complex organizations of layers to be combined into "slides".
+
+The program automatically generates the code to include the slides within a LaTeX presentation that uses the [Beamer package](https://latex-beamer.com/).
 
 If the content of an Inkscape session looks like the one in the following screenshot
 
@@ -60,7 +62,7 @@ inklayers fishes2.json
 
 The exported layers and their conversions are saved in `output/` under the current directory.
 
-Assuming that Imagemagick is installed in the system, the slideshow as animated GIF in the above example can be obtained with the following command:
+Assuming that [Imagemagick](https://imagemagick.org/) is installed in the system, the slideshow as animated GIF in the above example can be obtained with the following command:
 
 ```
 convert -delay 75 -loop 0 output/*.png slideshow.gif
