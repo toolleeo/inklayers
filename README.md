@@ -68,9 +68,9 @@ convert -delay 75 -loop 0 output/*.png slideshow.gif
 
 # Reference to layers
 
-Layers can be referenced by label or index (#0, #1, ...), or by layer's name.
+Layers can be referenced by label or index (`#0`, #`1`, ...), or by layer's name.
 The first layer has index 0.
-Layer's interval is supported. Example format: #1-#9.
+Layer's interval is supported. Example format: `#1-#9`.
 
 Layers can be selected for inclusion or exclusion.
 If include/exclude options collide, the latest prevails.
