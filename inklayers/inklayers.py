@@ -639,10 +639,19 @@ class InklayersSystem():
         try:
             self.run([inkPath, "-V"])
             output = subprocess.check_output([inkPath, '-V'])
-            version = semantic_version.Version(str(output).split(' ')[1])
-            return inkPath, version
         except FileNotFoundError:
             raise FileNotFoundError('Inkscape command line executable not found.\nSet --inkscape option accordingly.')
+        version_str = str(output).split(' ')[1]
+        numbers = version_str.split('.')
+        # handle version format such as 1.2 (wrong semantic versioning format)
+        if len(numbers) >= 3:
+            version = semantic_version.Version(version_str)
+        else:
+            if len(numbers) == 2:
+                version = semantic_version.Version(major=int(numbers[0]), minor=int(numbers[1]), patch=0)
+            elif len(numbers) == 1:
+                version = semantic_version.Version(major=int(numbers[0]), minor=0, patch=0)
+        return inkPath, version
 
 
     def process_input_file(self, infile):
